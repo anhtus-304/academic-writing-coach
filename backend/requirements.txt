@@ -1,0 +1,37 @@
+# Core Framework 
+fastapi==0.115.* 
+uvicorn[standard]==0.34.* 
+python-dotenv==1.1.* 
+pydantic==2.11.* 
+pydantic-settings==2.9.* 
+ 
+# Database 
+sqlalchemy[asyncio]==2.0.* 
+asyncpg==0.30.* 
+alembic==1.16.* 
+ 
+# Authentication 
+python-jose[cryptography]==3.4.* 
+httpx==0.28.* 
+python-multipart==0.0.* 
+ 
+# Agent Framework 
+langgraph==0.4.* 
+langchain-core==0.3.* 
+langchain-openai==0.3.* 
+ 
+# Search APIs 
+aiohttp==3.12.* 
+feedparser==6.0.* 
+ 
+# Utilities 
+pyyaml==6.0.* 
+jinja2==3.1.* 
+python-dateutil==2.9.* 
+ 
+# Testing 
+pytest==8.4.* 
+pytest-asyncio==1.0.* 
+ 
+# Dev Tools 
+ruff==0.11.* 
