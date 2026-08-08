@@ -1,15 +1,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 
 
-class AILog(Base):
-    __tablename__ = "ai_use_logs"
+class SearchSession(Base):
+    __tablename__ = "search_sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -23,30 +23,14 @@ class AILog(Base):
         nullable=False,
     )
 
-    model: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True,
-    )
-
-    action: Mapped[str] = mapped_column(
-        String,
+    query: Mapped[str] = mapped_column(
+        Text,
         nullable=False,
     )
 
-    prompt: Mapped[str | None] = mapped_column(
-        Text,
+    search_engine: Mapped[str | None] = mapped_column(
+        String,
         nullable=True,
-    )
-
-    response: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    tokens_used: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -57,5 +41,5 @@ class AILog(Base):
 
     project = relationship(
         "Project",
-        back_populates="ai_use_logs",
+        back_populates="search_sessions",
     )

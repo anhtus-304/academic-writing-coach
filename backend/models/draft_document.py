@@ -1,15 +1,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 
 
-class AILog(Base):
-    __tablename__ = "ai_use_logs"
+class DraftDocument(Base):
+    __tablename__ = "draft_documents"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -23,29 +23,24 @@ class AILog(Base):
         nullable=False,
     )
 
-    model: Mapped[str | None] = mapped_column(
+    title: Mapped[str | None] = mapped_column(
         String,
         nullable=True,
     )
 
-    action: Mapped[str] = mapped_column(
-        String,
+    content: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    version: Mapped[int] = mapped_column(
+        default=1,
         nullable=False,
     )
 
-    prompt: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    response: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    tokens_used: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
+    status: Mapped[str] = mapped_column(
+        String,
+        default="draft",
         nullable=False,
     )
 
@@ -55,7 +50,14 @@ class AILog(Base):
         nullable=False,
     )
 
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
     project = relationship(
         "Project",
-        back_populates="ai_use_logs",
+        back_populates="draft_documents",
     )
