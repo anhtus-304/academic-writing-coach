@@ -1,0 +1,53 @@
+id: bai_bao_khoa_hoc
+name: "Dàn ý Bài báo Khoa học (IMRaD Format)"
+document_type: bai_bao_khoa_hoc
+target_pages: "10-18"
+description: "Dàn ý bài báo khoa học công bố tạp chí theo chuẩn quốc tế IMRaD (Introduction, Methods, Results, and Discussion)."
+sections:
+  - code: TITLE_ABS
+    title: "TÊN BÀI BÁO, TÓM TẮT (ABSTRACT) VÀ TỪ KHÓA"
+    required: true
+    subsections:
+      - title: "Title (Tên đề tài tiếng Việt và tiếng Anh)"
+      - title: "Abstract (Tóm tắt: Mục tiêu, Phương pháp, Kết quả chính, Kết luận - 150-250 từ)"
+      - title: "Keywords (Từ khóa: 3-6 từ khóa chuyên ngành)"
+
+  - code: INTRO
+    title: "1. GIỚI THIỆU (INTRODUCTION)"
+    required: true
+    subsections:
+      - title: "1.1. Bối cảnh và tầm quan trọng của vấn đề nghiên cứu"
+      - title: "1.2. Tổng quan tình hình nghiên cứu (Literature Review & Gaps)"
+      - title: "1.3. Mục tiêu nghiên cứu và đóng góp mới của bài báo"
+
+  - code: METHODS
+    title: "2. PHƯƠNG PHÁP NGHIÊN CỨU (MATERIALS AND METHODS)"
+    required: true
+    subsections:
+      - title: "2.1. Khung lý thuyết / Khung phân tích"
+      - title: "2.2. Dữ liệu và mẫu nghiên cứu (Data & Sampling)"
+      - title: "2.3. Phương pháp phân tích và mô hình thực nghiệm"
+
+  - code: RESULTS
+    title: "3. KẾT QUẢ NGHIÊN CỨU (RESULTS)"
+    required: true
+    subsections:
+      - title: "3.1. Kết quả mô tả dữ liệu"
+      - title: "3.2. Kết quả ước lượng mô hình / Phân tích thực nghiệm"
+      - title: "3.3. Kiểm định tính vững (Robustness checks - nếu có)"
+
+  - code: DISC
+    title: "4. THẢO LUẬN VÀ HÀM Ý (DISCUSSION & IMPLICATIONS)"
+    required: true
+    subsections:
+      - title: "4.1. So sánh kết quả với các nghiên cứu tiền nhiệm"
+      - title: "4.2. Hàm ý chính sách và thực tiễn"
+      - title: "4.3. Hạn chế của nghiên cứu"
+
+  - code: CONCL
+    title: "5. KẾT LUẬN VÀ TÀI LIỆU THAM KHẢO (CONCLUSION & REFERENCES)"
+    required: true
+    subsections:
+      - title: "5.1. Kết luận tóm tắt"
+      - title: "5.2. Lời cảm ơn (Acknowledgements)"
+      - title: "5.3. Tài liệu tham khảo (References format: APA/IEEE/Harvard)"

@@ -1,0 +1,62 @@
+id: tieu_luan_default
+name: "Dàn ý Tiểu luận Môn học Chuẩn"
+document_type: tieu_luan
+target_pages: "15-25"
+description: "Dàn ý tiêu chuẩn dành cho Tiểu luận môn học ở bậc Đại học / Cao đẳng tại Việt Nam."
+sections:
+  - code: INTRO
+    title: "MỞ ĐẦU"
+    required: true
+    subsections:
+      - title: "1. Lý do chọn đề tài (Tính cấp thiết)"
+        description: "Trình bày bối cảnh, lý do lý luận và thực tiễn chọn đề tài."
+      - title: "2. Mục tiêu và nhiệm vụ nghiên cứu"
+        description: "Xác định mục tiêu tổng quát và các nhiệm vụ cụ thể cần hoàn thành."
+      - title: "3. Đối tượng và phạm vi nghiên cứu"
+        description: "Giới hạn đối tượng, không gian, thời gian nghiên cứu."
+      - title: "4. Phương pháp nghiên cứu"
+        description: "Nêu các phương pháp chính sử dụng (phân tích, tổng hợp, so sánh...)."
+      - title: "5. Kết cấu của tiểu luận"
+        description: "Giới thiệu các chương chính của bài tiểu luận."
+
+  - code: CH1
+    title: "CHƯƠNG 1: CƠ SỞ LÝ LUẬN VỀ ĐỀ TÀI NGHIÊN CỨU"
+    required: true
+    subsections:
+      - title: "1.1. Các khái niệm cơ bản"
+        description: "Định nghĩa các khái niệm trung tâm của đề tài."
+      - title: "1.2. Khung lý thuyết và các nội dung cốt lõi"
+        description: "Phân tích các lý thuyết nền tảng liên quan."
+      - title: "1.3. Các yếu tố ảnh hưởng / Các chỉ tiêu đánh giá"
+        description: "Xác định các nhân tố tác động đến đối tượng nghiên cứu."
+
+  - code: CH2
+    title: "CHƯƠNG 2: THỰC TRẠNG VẤN ĐỀ NGHIÊN CỨU"
+    required: true
+    subsections:
+      - title: "2.1. Tổng quan về đối tượng / địa bàn nghiên cứu"
+        description: "Bối cảnh thực tế của vấn đề."
+      - title: "2.2. Phân tích thực trạng vấn đề"
+        description: "Trình bày dữ liệu, dẫn chứng thực tế, phân tích chi tiết."
+      - title: "2.3. Đánh giá chung (Thành tựu, Hạn chế và Nguyên nhân)"
+        description: "Rút ra ưu điểm, nhược điểm và nguyên nhân tồn tại."
+
+  - code: CH3
+    title: "CHƯƠNG 3: ĐỀ XUẤT GIẢI PHÁP VÀ KHUYẾN NGHỊ"
+    required: true
+    subsections:
+      - title: "3.1. Định hướng và mục tiêu phát triển"
+        description: "Phương hướng định hình giải pháp."
+      - title: "3.2. Các giải pháp cụ thể"
+        description: "Nêu 3-5 giải pháp thực tiễn có tính khả thi."
+      - title: "3.3. Kiến nghị thực thi"
+        description: "Kiến nghị tới cơ quan, tổ chức liên quan."
+
+  - code: OUTRO
+    title: "KẾT LUẬN VÀ TÀI LIỆU THAM KHẢO"
+    required: true
+    subsections:
+      - title: "Kết luận"
+        description: "Tóm tắt kết quả nghiên cứu chính của bài tiểu luận."
+      - title: "Danh mục tài liệu tham khảo"
+        description: "Liệt kê tài liệu tham khảo theo chuẩn APA/IEEE."

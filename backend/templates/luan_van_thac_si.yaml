@@ -1,0 +1,60 @@
+id: luan_van_thac_si
+name: "Dàn ý Luận văn Thạc sĩ Nâng cao"
+document_type: luan_van
+target_pages: "70-120"
+description: "Dàn ý chuyên sâu dành cho Luận văn Thạc sĩ theo chuẩn đào tạo Sau Đại học."
+sections:
+  - code: INTRO
+    title: "PHẦN MỞ ĐẦU"
+    required: true
+    subsections:
+      - title: "1. Tính cấp thiết của đề tài nghiên cứu"
+      - title: "2. Tổng quan tình hình nghiên cứu (Literature Review)"
+      - title: "3. Mục tiêu và câu hỏi nghiên cứu (Research Questions)"
+      - title: "4. Đối tượng, khách thể và phạm vi nghiên cứu"
+      - title: "5. Giả thuyết nghiên cứu / Khung phân tích (Conceptual Framework)"
+      - title: "6. Phương pháp nghiên cứu"
+      - title: "7. Đóng góp mới của luận văn về mặt lý luận và thực tiễn"
+
+  - code: CH1
+    title: "CHƯƠNG 1: TỔNG QUAN TÀI LIỆU VÀ CƠ SỞ LÝ LUẬN"
+    required: true
+    subsections:
+      - title: "1.1. Các dòng nghiên cứu chính trong và ngoài nước"
+      - title: "1.2. Các lý thuyết nền tảng (Underlying Theories)"
+      - title: "1.3. Mô hình nghiên cứu đề xuất và các giả thuyết"
+      - title: "1.4. Khoảng trống nghiên cứu (Research Gap)"
+
+  - code: CH2
+    title: "CHƯƠNG 2: PHƯƠNG PHÁP NGHIÊN CỨU VÀ THIẾT KẾ NGHIÊN CỨU"
+    required: true
+    subsections:
+      - title: "2.1. Quy trình nghiên cứu (Research Design)"
+      - title: "2.2. Phương pháp chọn mẫu và thu thập dữ liệu"
+      - title: "2.3. Xây dựng thang đo và công cụ đo lường"
+      - title: "2.4. Phương pháp kiểm định và phân tích dữ liệu (SPSS/AMOS/SmartPLS/NVivo)"
+
+  - code: CH3
+    title: "CHƯƠNG 3: KẾT QUẢ NGHIÊN CỨU VÀ THẢO LUẬN"
+    required: true
+    subsections:
+      - title: "3.1. Mô tả mẫu nghiên cứu và đặc điểm dữ liệu"
+      - title: "3.2. Kết quả phân tích định lượng / định tính"
+      - title: "3.3. Kiểm định các giả thuyết nghiên cứu"
+      - title: "3.4. Thảo luận kết quả (So sánh với các nghiên cứu trước đây)"
+
+  - code: CH4
+    title: "CHƯƠNG 4: HÀM Ý QUẢN LÝ VÀ GIẢI PHÁP THỰC TIỄN"
+    required: true
+    subsections:
+      - title: "4.1. Các hàm ý chính sách / Hàm ý quản trị (Managerial Implications)"
+      - title: "4.2. Khuyến nghị và giải pháp ứng dụng"
+      - title: "4.3. Hạn chế của đề tài và hướng nghiên cứu tương lai (Limitations & Future Scope)"
+
+  - code: OUTRO
+    title: "KẾT LUẬN VÀ TÀI LIỆU THAM KHẢO"
+    required: true
+    subsections:
+      - title: "Kết luận tổng thể"
+      - title: "Danh mục tài liệu tham khảo (Chuẩn APA 7th)"
+      - title: "Phụ lục chi tiết"

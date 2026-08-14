@@ -1,0 +1,79 @@
+id: khoa_luan_default
+name: "Dàn ý Khóa luận Tốt nghiệp Cử nhân Chuẩn"
+document_type: khoa_luan
+target_pages: "50-80"
+description: "Dàn ý chuẩn cho Khóa luận tốt nghiệp cử nhân Đại học."
+sections:
+  - code: INTRO
+    title: "PHẦN MỞ ĐẦU"
+    required: true
+    subsections:
+      - title: "1. Tính cấp thiết của đề tài"
+        description: "Lý do chọn đề tài nghiên cứu về mặt lý luận và thực tiễn."
+      - title: "2. Tổng quan tình hình nghiên cứu"
+        description: "Tóm tắt các công trình nghiên cứu trong và ngoài nước liên quan."
+      - title: "3. Mục tiêu và nhiệm vụ nghiên cứu"
+        description: "Mục tiêu tổng quát và các mục tiêu cụ thể."
+      - title: "4. Đối tượng và phạm vi nghiên cứu"
+        description: "Đối tượng, phạm vi nội dung, không gian và thời gian."
+      - title: "5. Phương pháp nghiên cứu"
+        description: "Phương pháp thu thập dữ liệu, xử lý dữ liệu và phân tích."
+      - title: "6. Đóng góp mới của đề tài"
+        description: "Ý nghĩa khoa học và thực tiễn của đề tài."
+      - title: "7. Bố cục của khóa luận"
+        description: "Cấu trúc các chương của khóa luận."
+
+  - code: CH1
+    title: "CHƯƠNG 1: CƠ SỞ LÝ LUẬN VỀ VẤN ĐỀ NGHIÊN CỨU"
+    required: true
+    subsections:
+      - title: "1.1. Khái niệm và bản chất"
+        description: "Các khái niệm then chốt và cơ sở lý thuyết gốc."
+      - title: "1.2. Nội dung và tiêu chí đánh giá"
+        description: "Các khía cạnh lý thuyết và bộ chỉ số/tiêu chí."
+      - title: "1.3. Các yếu tố ảnh hưởng"
+        description: "Phân tích nhóm yếu tố chủ quan và khách quan."
+      - title: "1.4. Kinh nghiệm thực tiễn và bài học rút ra"
+        description: "Bài học kinh nghiệm từ các mô hình/đơn vị tương tự."
+
+  - code: CH2
+    title: "CHƯƠNG 2: PHƯƠNG PHÁP NGHIÊN CỨU VÀ DỮ LIỆU"
+    required: true
+    subsections:
+      - title: "2.1. Quy trình nghiên cứu"
+        description: "Sơ đồ quy trình và các bước thực hiện."
+      - title: "2.2. Phương pháp thu thập dữ liệu"
+        description: "Dữ liệu thứ cấp và dữ liệu sơ cấp (khảo sát, phỏng vấn)."
+      - title: "2.3. Phương pháp phân tích dữ liệu"
+        description: "Các công cụ thống kê, định lượng hoặc định tính sử dụng."
+
+  - code: CH3
+    title: "CHƯƠNG 3: THỰC TRẠNG VẤN ĐỀ NGHIÊN CỨU TẠI ĐƠN VỊ/ĐỊA BÀN"
+    required: true
+    subsections:
+      - title: "3.1. Giới thiệu tổng quan về đơn vị / địa bàn nghiên cứu"
+        description: "Lịch sử hình thành, chức năng, cơ cấu."
+      - title: "3.2. Phân tích thực trạng"
+        description: "Phân tích dữ liệu thực tế thu thập được."
+      - title: "3.3. Đánh giá thực trạng"
+        description: "Những kết quả đạt được, hạn chế tồn tại và nguyên nhân."
+
+  - code: CH4
+    title: "CHƯƠNG 4: GIẢI PHÁP VÀ KHUYẾN NGHỊ"
+    required: true
+    subsections:
+      - title: "4.1. Bối cảnh và mục tiêu định hướng"
+        description: "Định hướng phát triển trong thời gian tới."
+      - title: "4.2. Các nhóm giải pháp đề xuất"
+        description: "Giải pháp ngắn hạn, trung hạn và dài hạn."
+      - title: "4.3. Kiến nghị và điều kiện thực thi"
+        description: "Đề xuất với cơ quan quản lý, doanh nghiệp để triển khai giải pháp."
+
+  - code: OUTRO
+    title: "KẾT LUẬN VÀ KIẾN NGHỊ"
+    required: true
+    subsections:
+      - title: "Kết luận chung"
+        description: "Tóm lược các đóng góp chính của khóa luận."
+      - title: "Tài liệu tham khảo & Phụ lục"
+        description: "Danh mục tài liệu tham khảo và phụ lục kèm theo (bảng hỏi, số liệu thô)."

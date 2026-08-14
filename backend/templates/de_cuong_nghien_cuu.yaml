@@ -1,0 +1,43 @@
+id: de_cuong_nghien_cuu
+name: "Dàn ý Đề cương Nghiên cứu (Research Proposal)"
+document_type: de_cuong_nghien_cuu
+target_pages: "15-25"
+description: "Dàn ý Đề cương nghiên cứu khoa học / Đề cương đề tài luận văn."
+sections:
+  - code: SEC1
+    title: "1. ĐẶT VẤN ĐỀ VÀ TÍNH CẤP THIẾT"
+    required: true
+    subsections:
+      - title: "1.1. Bối cảnh nghiên cứu"
+      - title: "1.2. Phát biểu vấn đề nghiên cứu (Problem Statement)"
+      - title: "1.3. Câu hỏi nghiên cứu và Mục tiêu nghiên cứu"
+
+  - code: SEC2
+    title: "2. TỔNG QUAN TÀI LIỆU VÀ KHUNG LÝ THUYẾT"
+    required: true
+    subsections:
+      - title: "2.1. Tổng quan các nghiên cứu liên quan"
+      - title: "2.2. Khung lý thuyết / Mô hình nghiên cứu dự kiến"
+      - title: "2.3. Giả thuyết nghiên cứu (nếu có)"
+
+  - code: SEC3
+    title: "3. PHƯƠNG PHÁP NGHIÊN CỨU DỰ KIẾN"
+    required: true
+    subsections:
+      - title: "3.1. Thiết kế nghiên cứu và đối tượng khảo sát"
+      - title: "3.2. Phương pháp thu thập dữ liệu"
+      - title: "3.3. Phương pháp xử lý và phân tích dữ liệu"
+
+  - code: SEC4
+    title: "4. KẾ HOẠCH THỰC HIỆN VÀ DỰ KIẾN KẾT QUẢ"
+    required: true
+    subsections:
+      - title: "4.1. Tiến độ thực hiện (Gantt Chart)"
+      - title: "4.2. Dự kiến sản phẩm và đóng góp nghiên cứu"
+      - title: "4.3. Dự toán kinh phí và nguồn lực (nếu có)"
+
+  - code: SEC5
+    title: "5. DANH MỤC TÀI LIỆU THAM KHẢO BAN ĐẦU"
+    required: true
+    subsections:
+      - title: "Danh mục tài liệu tham khảo cốt lõi"
