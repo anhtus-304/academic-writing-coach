@@ -1,0 +1,48 @@
+id: bao_cao_thuc_tap
+name: "Dàn ý Báo cáo Thực tập Tốt nghiệp"
+document_type: bao_cao_thuc_tap
+target_pages: "30-45"
+description: "Dàn ý Báo cáo thực tập tốt nghiệp tại doanh nghiệp / cơ quan."
+sections:
+  - code: INTRO
+    title: "PHẦN MỞ ĐẦU"
+    required: true
+    subsections:
+      - title: "1. Lý do chọn cơ quan thực tập và đề tài thực tập"
+      - title: "2. Mục tiêu thực tập"
+      - title: "3. Phương pháp thực hiện báo cáo"
+      - title: "4. Bố cục của báo cáo thực tập"
+
+  - code: CH1
+    title: "CHƯƠNG 1: TỔNG QUAN VỀ ĐƠN VỊ THỰC TẬP"
+    required: true
+    subsections:
+      - title: "1.1. Lịch sử hình thành và phát triển"
+      - title: "1.2. Cơ cấu tổ chức và chức năng các bộ phận"
+      - title: "1.3. Lĩnh vực hoạt động và sản phẩm / dịch vụ chính"
+      - title: "1.4. Kết quả hoạt động kinh doanh / chuyên môn gần đây"
+
+  - code: CH2
+    title: "CHƯƠNG 2: THỰC TRẠNG CÔNG VIỆC THỰC TẬP VÀ PHÂN TÍCH CHUYÊN MÔN"
+    required: true
+    subsections:
+      - title: "2.1. Mô tả vị trí thực tập và nhiệm vụ được giao"
+      - title: "2.2. Quy trình thực hiện công việc thực tế"
+      - title: "2.3. Phân tích chi tiết chuyên đề thực tập"
+      - title: "2.4. Kết quả đạt được và bài học kinh nghiệm"
+
+  - code: CH3
+    title: "CHƯƠNG 3: ĐÁNH GIÁ VÀ GIẢI PHÁP ĐỀ XUẤT"
+    required: true
+    subsections:
+      - title: "3.1. Đánh giá ưu điểm và tồn tại tại đơn vị thực tập"
+      - title: "3.2. Đề xuất giải pháp hoàn thiện quy trình / công việc"
+      - title: "3.3. Kiến nghị đối với nhà trường và đơn vị thực tập"
+
+  - code: OUTRO
+    title: "KẾT LUẬN VÀ PHỤ LỤC"
+    required: true
+    subsections:
+      - title: "Kết luận chung"
+      - title: "Nhật ký thực tập và xác nhận của cơ quan"
+      - title: "Tài liệu tham khảo & Phụ lục minh họa"
