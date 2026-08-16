@@ -7,6 +7,7 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 try:
+    # pyrefly: ignore [missing-import]
     import pytest
 except ImportError:
     class DummyPytest:
@@ -50,7 +51,7 @@ def sample_paper_en():
         journal="Computers & Education",
         volume="180",
         pages="104-115",
-        doi="10.1016/j.compedu.2024.104115",
+        doi="10.1016/j.compedu.2024.105014",
         doc_type=DocumentType.JOURNAL,
     )
 
@@ -62,7 +63,7 @@ def test_apa7_formatting(sample_paper_en):
     assert "Smith, J. A., & Taylor, R." in res.full_citation
     assert "(2024)." in res.full_citation
     assert "Generative AI in Academic Writing: Opportunities and Challenges." in res.full_citation
-    assert "https://doi.org/10.1016/j.compedu.2024.104115" in res.full_citation
+    assert "https://doi.org/10.1016/j.compedu.2024.105014" in res.full_citation
 
 
 def test_ieee_formatting(sample_paper_en):
@@ -73,7 +74,7 @@ def test_ieee_formatting(sample_paper_en):
     assert '"Generative AI in Academic Writing: Opportunities and Challenges,"' in res.full_citation
     assert "vol. 180," in res.full_citation
     assert "2024." in res.full_citation
-    assert "doi: 10.1016/j.compedu.2024.104115." in res.full_citation
+    assert "doi: 10.1016/j.compedu.2024.105014." in res.full_citation
 
 
 def test_bgddt_formatting(sample_paper_vn):
