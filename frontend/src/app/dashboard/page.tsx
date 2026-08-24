@@ -36,9 +36,9 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold text-gray-900">Dự án của bạn</h1>
             <p className="text-gray-500 text-sm mt-1">Quản lý các tiểu luận, khóa luận và luận văn đang thực hiện.</p>
           </div>
-          <button className="bg-purple-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-purple-700 shadow-sm flex items-center transition">
+          <Link href="/workspace" className="bg-purple-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-purple-700 shadow-sm flex items-center transition">
             <span className="mr-2 text-lg leading-none">+</span> Tạo dự án mới
-          </button>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
