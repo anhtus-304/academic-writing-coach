@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { authApi, projectApi, getAuthToken, clearAuthToken, UserProfile, ProjectData } from "@/lib/api";
+import { authApi, projectApi, clearAuthToken, UserProfile, ProjectData } from "@/lib/api";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -24,31 +24,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadDashboardData() {
-      const token = getAuthToken();
-      if (!token) {
-        // Auto sign-in with dev user if no token for instant seamless preview
-        try {
-          const devUser = await authApi.devLogin();
-          localStorage.setItem("token", devUser.access_token);
-          setUser(devUser.user);
-        } catch {
-          router.push("/auth/signin");
-          return;
-        }
-      }
-
       try {
-        const [me, projectList] = await Promise.all([
-          authApi.getMe().catch(() => null),
-          projectApi.list().catch(() => []),
-        ]);
+        // Fetch authenticated user via HttpOnly cookie (or authorization header)
+        const me = await authApi.getMe();
+        setUser(me);
 
-        if (me) {
-          setUser(me);
-        }
+        // Fetch user's project list
+        const projectList = await projectApi.list().catch(() => []);
         setProjects(projectList);
       } catch (err) {
-        console.error("Failed to load dashboard data:", err);
+        console.warn("Chưa xác thực hoặc phiên đăng nhập hết hạn, chuyển hướng tới signin:", err);
+        router.push("/auth/signin");
       } finally {
         setLoading(false);
       }
@@ -57,8 +43,12 @@ export default function DashboardPage() {
     loadDashboardData();
   }, [router]);
 
-  const handleLogout = () => {
-    clearAuthToken();
+  const handleLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      clearAuthToken();
+    }
     router.push("/auth/signin");
   };
 

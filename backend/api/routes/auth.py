@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -69,7 +69,19 @@ async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
     frontend_url = "http://localhost:3000"
     if settings.BACKEND_CORS_ORIGINS:
         frontend_url = str(settings.BACKEND_CORS_ORIGINS[0]).rstrip("/")
-    return RedirectResponse(f"{frontend_url}/auth/callback?token={access_token}")
+
+    # Redirect to Frontend dashboard without exposing token on URL
+    response = RedirectResponse(url=f"{frontend_url}/dashboard", status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,  # Set to True when HTTPS is enabled
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/"
+    )
+    return response
 
 @router.post("/dev-login")
 async def dev_login(data: DevLoginRequest = DevLoginRequest(), db: AsyncSession = Depends(get_db)):
@@ -91,7 +103,7 @@ async def dev_login(data: DevLoginRequest = DevLoginRequest(), db: AsyncSession 
         await db.refresh(user)
 
     access_token = create_access_token(data={"sub": user.id, "email": user.email})
-    return {
+    response_content = {
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
@@ -102,6 +114,23 @@ async def dev_login(data: DevLoginRequest = DevLoginRequest(), db: AsyncSession 
             "credits": user.credit_balance
         }
     }
+    response = JSONResponse(content=response_content)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/"
+    )
+    return response
+
+@router.post("/logout")
+async def logout():
+    response = JSONResponse(content={"message": "Đăng xuất thành công"})
+    response.delete_cookie(key="access_token", path="/")
+    return response
 
 @router.get("/me")
 async def get_me(current_user: User = Depends(get_current_user)):

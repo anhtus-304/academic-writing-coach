@@ -28,6 +28,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
+    credentials: "include", // Automatically send and receive HttpOnly Cookies
   });
 
   if (!response.ok) {
@@ -98,6 +99,12 @@ export const authApi = {
         body: JSON.stringify({ email: email || "demo@student.edu.vn", name: name || "Thúy Vi" }),
       }
     ),
+  logout: () =>
+    apiFetch<{ message: string }>("/api/v1/auth/logout", {
+      method: "POST",
+    }).finally(() => {
+      clearAuthToken();
+    }),
   getMe: () => apiFetch<UserProfile>("/api/v1/auth/me"),
 };
 
