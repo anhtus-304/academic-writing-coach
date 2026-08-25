@@ -1,7 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
-from backend.services.llm_service import LLMService, llm_service
+try:
+    from backend.services.llm_service import LLMService, llm_service
+except ImportError:
+    from services.llm_service import LLMService, llm_service
 
 logger = logging.getLogger(__name__)
 

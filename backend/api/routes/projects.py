@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional, Any
+from pydantic import BaseModel
 from api.dependencies import get_current_user
 from database import get_db
 from models.user import User
@@ -8,6 +9,14 @@ from schemas.project_schemas import ProjectCreate, ProjectUpdate, ProjectRespons
 from services import project_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+class OutlineGenerateRequest(BaseModel):
+    template_id: Optional[str] = None
+    user_requirements: Optional[str] = None
+
+class OutlineUpdateRequest(BaseModel):
+    chapters: Any
+    suggestions: Optional[Any] = None
 
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
@@ -60,3 +69,83 @@ async def delete_project(
         raise HTTPException(status_code=404, detail="Project not found")
     await project_service.delete_project(db, project)
     return None
+
+@router.post("/{project_id}/outline/generate")
+async def generate_outline(
+    project_id: str,
+    body: OutlineGenerateRequest = OutlineGenerateRequest(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        outline = await project_service.generate_project_outline(
+            db, project_id, current_user.id, body.template_id, body.user_requirements
+        )
+        if not outline:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return {
+            "success": True,
+            "outline": {
+                "id": outline.id,
+                "project_id": outline.project_id,
+                "title": outline.title,
+                "chapters": outline.chapters,
+                "suggestions": outline.suggestions,
+                "template_source": outline.template_source,
+                "version": outline.version,
+                "generated_at": str(outline.generated_at),
+                "updated_at": str(outline.updated_at)
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{project_id}/outline")
+async def get_outline(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    outline = await project_service.get_project_outline(db, project_id, current_user.id)
+    if not outline:
+        return {"success": False, "outline": None}
+    return {
+        "success": True,
+        "outline": {
+            "id": outline.id,
+            "project_id": outline.project_id,
+            "title": outline.title,
+            "chapters": outline.chapters,
+            "suggestions": outline.suggestions,
+            "template_source": outline.template_source,
+            "version": outline.version,
+            "generated_at": str(outline.generated_at),
+            "updated_at": str(outline.updated_at)
+        }
+    }
+
+@router.put("/{project_id}/outline")
+async def update_outline(
+    project_id: str,
+    body: OutlineUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    outline = await project_service.update_project_outline(
+        db, project_id, current_user.id, body.chapters, body.suggestions
+    )
+    if not outline:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {
+        "success": True,
+        "outline": {
+            "id": outline.id,
+            "project_id": outline.project_id,
+            "title": outline.title,
+            "chapters": outline.chapters,
+            "suggestions": outline.suggestions,
+            "version": outline.version
+        }
+    }

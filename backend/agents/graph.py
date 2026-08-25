@@ -29,8 +29,10 @@ class AgentState(TypedDict, total=False):
 
 async def outline_node(state: AgentState) -> Dict[str, Any]:
     """LangGraph node wrapper for outline generation step."""
-    logger.info(f"[LangGraph] Executing Outline Node for topic: {state.get('topic')}")
-    from backend.agents.outline_agent import outline_agent
+    try:
+        from backend.agents.outline_agent import outline_agent
+    except ImportError:
+        from agents.outline_agent import outline_agent
     
     try:
         result = await outline_agent.generate_outline(

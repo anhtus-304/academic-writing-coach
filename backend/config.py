@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str
     DEFAULT_MODEL: str
     FALLBACK_MODEL: str
+    LLM_TIMEOUT_SECONDS: float = 30.0
 
     # Security & JWT settings
     JWT_SECRET: str

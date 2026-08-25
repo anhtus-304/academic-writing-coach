@@ -6,18 +6,34 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
-
-from backend.agents.base_agent import BaseAgent
-from backend.services.llm_service import LLMService, llm_service
-from backend.schemas.outline_schemas import (
-    AcademicOutline,
-    OutlineGenerationInput,
-    OutlineResponse,
-)
-from backend.prompts.outline_prompts import (
-    OUTLINE_SYSTEM_PROMPT,
-    OUTLINE_USER_PROMPT_TEMPLATE,
-)
+try:
+    from backend.agents.base_agent import BaseAgent
+    from backend.services.llm_service import LLMService, llm_service
+    from backend.schemas.outline_schemas import (
+        AcademicOutline,
+        OutlineGenerationInput,
+        OutlineResponse,
+        OutlineSection,
+        OutlineSubSection,
+    )
+    from backend.prompts.outline_prompts import (
+        OUTLINE_SYSTEM_PROMPT,
+        OUTLINE_USER_PROMPT_TEMPLATE,
+    )
+except ImportError:
+    from agents.base_agent import BaseAgent
+    from services.llm_service import LLMService, llm_service
+    from schemas.outline_schemas import (
+        AcademicOutline,
+        OutlineGenerationInput,
+        OutlineResponse,
+        OutlineSection,
+        OutlineSubSection,
+    )
+    from prompts.outline_prompts import (
+        OUTLINE_SYSTEM_PROMPT,
+        OUTLINE_USER_PROMPT_TEMPLATE,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +92,132 @@ class OutlineAgent(BaseAgent):
 
         return None
 
+    def _build_outline_from_template(
+        self,
+        topic: str,
+        document_type: str,
+        field: Optional[str],
+        target_length: Optional[str],
+        template_data: Optional[Dict[str, Any]],
+    ) -> AcademicOutline:
+        sections: list[OutlineSection] = []
+        if template_data and "sections" in template_data:
+            for s in template_data["sections"]:
+                subsections = []
+                for sub in s.get("subsections", []):
+                    subsections.append(
+                        OutlineSubSection(
+                            title=sub.get("title", "Tiểu mục"),
+                            description=sub.get("description", ""),
+                            estimated_word_count=500,
+                            key_points=[
+                                f"Nội dung trọng tâm liên quan đến {topic[:35]}...",
+                                "Phân tích và đối chiếu tài liệu học thuật liên quan",
+                            ],
+                        )
+                    )
+                sections.append(
+                    OutlineSection(
+                        section_code=s.get("code", "SEC"),
+                        title=s.get("title", "Chương"),
+                        description=s.get("description", ""),
+                        subsections=subsections,
+                    )
+                )
+
+        if not sections:
+            sections = [
+                OutlineSection(
+                    section_code="INTRO",
+                    title="MỞ ĐẦU",
+                    description="Tổng quan và tính cấp thiết",
+                    subsections=[
+                        OutlineSubSection(
+                            title="1. Lý do chọn đề tài",
+                            description=f"Tính cấp thiết của nghiên cứu về {topic}",
+                            estimated_word_count=400,
+                            key_points=["Bối cảnh thực tiễn", "Khoảng trống nghiên cứu"],
+                        ),
+                        OutlineSubSection(
+                            title="2. Mục tiêu nghiên cứu",
+                            description="Mục tiêu tổng quát và cụ thể",
+                            estimated_word_count=300,
+                            key_points=["Mục tiêu lý luận", "Mục tiêu thực tiễn"],
+                        ),
+                    ],
+                ),
+                OutlineSection(
+                    section_code="CH1",
+                    title="CHƯƠNG 1: CƠ SỞ LÝ LUẬN VÀ TỔNG QUAN TÀI LIỆU",
+                    description="Khung lý thuyết nền tảng",
+                    subsections=[
+                        OutlineSubSection(
+                            title="1.1. Các khái niệm và định nghĩa cơ bản",
+                            description="Lý thuyết nền tảng",
+                            estimated_word_count=1000,
+                            key_points=["Khái niệm cốt lõi", "Mô hình phân tích"],
+                        )
+                    ],
+                ),
+                OutlineSection(
+                    section_code="CH2",
+                    title="CHƯƠNG 2: THỰC TRẠNG VÀ ĐÁNH GIÁ VẤN ĐỀ",
+                    description="Phân tích số liệu và hiện trạng",
+                    subsections=[
+                        OutlineSubSection(
+                            title="2.1. Phân tích thực trạng",
+                            description="Đánh giá dữ liệu và khảo sát thực tế",
+                            estimated_word_count=1500,
+                            key_points=["Dữ liệu thu thập", "Phát hiện chính"],
+                        )
+                    ],
+                ),
+                OutlineSection(
+                    section_code="CH3",
+                    title="CHƯƠNG 3: ĐỀ XUẤT GIẢI PHÁP VÀ KIẾN NGHỊ",
+                    description="Các định hướng và giải pháp khả thi",
+                    subsections=[
+                        OutlineSubSection(
+                            title="3.1. Các giải pháp trọng tâm",
+                            description="Giải pháp cụ thể cho đề tài",
+                            estimated_word_count=1000,
+                            key_points=["Giải pháp ngắn hạn", "Giải pháp dài hạn"],
+                        )
+                    ],
+                ),
+                OutlineSection(
+                    section_code="OUTRO",
+                    title="KẾT LUẬN VÀ TÀI LIỆU THAM KHẢO",
+                    description="Tổng kết và nguồn trích dẫn",
+                    subsections=[
+                        OutlineSubSection(
+                            title="Kết luận",
+                            description="Tổng kết kết quả đạt được",
+                            estimated_word_count=400,
+                            key_points=["Tóm tắt đóng góp nghiên cứu"],
+                        )
+                    ],
+                ),
+            ]
+
+        keywords = [
+            topic.split()[0] if topic else "Nghiên cứu",
+            field or "Học thuật",
+            "Phương pháp phân tích tổng hợp",
+        ]
+
+        return AcademicOutline(
+            topic=topic,
+            document_type=document_type,
+            field=field,
+            language="vi",
+            total_estimated_pages=target_length or "20 trang",
+            sections=sections,
+            research_methodology_suggestion="Kết hợp phương pháp nghiên cứu định tính (tổng quan tài liệu) và định lượng (số liệu khảo sát).",
+            key_academic_keywords=keywords,
+            writing_guidelines="Chú ý trích dẫn nguồn học thuật theo chuẩn APA/IEEE, đảm bảo tính mạch lạc và lập luận chặt chẽ.",
+        )
+
     async def generate_outline(
         self,
         topic: str,
@@ -86,6 +228,7 @@ class OutlineAgent(BaseAgent):
         user_requirements: Optional[str] = None,
         language: str = "vi",
         model: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> AcademicOutline:
         """Generates a structured academic outline based on topic and parameters."""
         logger.info(f"Generating outline for topic: '{topic}' (Type: {document_type})")
@@ -121,15 +264,27 @@ class OutlineAgent(BaseAgent):
             template_context_block=template_context_block,
         )
 
-        # 3. Call LLM with Pydantic structured output
-        outline = await self.llm_service.generate_structured_output(
-            system_prompt=OUTLINE_SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            schema=AcademicOutline,
-            model=model,
-        )
-
-        return outline
+        # 3. Call LLM with Pydantic structured output, with fallback
+        try:
+            outline = await self.llm_service.generate_structured_output(
+                system_prompt=OUTLINE_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                schema=AcademicOutline,
+                model=model,
+                timeout=timeout,
+            )
+            return outline
+        except Exception as e:
+            logger.warning(
+                f"LLM generation failed ({e}). Falling back to template-based synthesis."
+            )
+            return self._build_outline_from_template(
+                topic=topic,
+                document_type=document_type,
+                field=field,
+                target_length=target_len_str,
+                template_data=template_data,
+            )
 
     async def run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """BaseAgent implementation method."""
