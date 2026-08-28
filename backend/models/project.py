@@ -1,114 +1,27 @@
-import uuid
-from datetime import datetime
-
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from datetime import datetime, timezone
+from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from database import Base
-
+import uuid
 
 class Project(Base):
     __tablename__ = "projects"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    topic = Column(String, nullable=False)
+    document_type = Column(Enum("tieu_luan", "khoa_luan", "luan_van", name="document_type_enum"), nullable=False, default="tieu_luan")
+    field = Column(String, nullable=True)
+    university = Column(String, nullable=True)
+    citation_style = Column(Enum("apa7", "ieee", "bgddt", name="citation_style_enum"), default="apa7")
+    additional_requirements = Column(Text, nullable=True)
+    status = Column(Enum("draft", "in_progress", "completed", name="project_status_enum"), default="draft", index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=func.now())
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=False,
-    )
-
-    title: Mapped[str] = mapped_column(
-        String,
-        nullable=False,
-    )
-
-    topic: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    field: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True,
-    )
-
-    document_type: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True,
-    )
-
-    language: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True,
-    )
-
-    citation_style: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True,
-    )
-
-    current_step: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False,
-    )
-
-    status: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True,
-    )
-
-    last_activity: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=datetime.utcnow,
-        nullable=False,
-    )
-
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False,
-    )
-    user = relationship(
-        "User",
-        back_populates="projects",
-    )
-
-    outlines = relationship(
-        "Outline",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
-
-    search_sessions = relationship(
-        "SearchSession",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
-    draft_documents = relationship(
-        "DraftDocument",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
-    ai_use_logs = relationship(
-        "AILog",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
-    selected_papers = relationship(
-        "SelectedPaper",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
+    owner = relationship("User", back_populates="projects")
+    outlines = relationship("Outline", back_populates="project", cascade="all, delete-orphan")
+    search_sessions = relationship("SearchSession", back_populates="project", cascade="all, delete-orphan")
+    selected_papers = relationship("SelectedPaper", back_populates="project", cascade="all, delete-orphan")
+    draft_documents = relationship("DraftDocument", back_populates="project", cascade="all, delete-orphan")

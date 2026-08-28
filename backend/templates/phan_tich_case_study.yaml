@@ -1,0 +1,44 @@
+id: phan_tich_case_study
+name: "Dàn ý Phân tích Tình huống Thực tiễn (Case Study Analysis)"
+document_type: phan_tich_case_study
+target_pages: "15-25"
+description: "Dàn ý phân tích tình huống thực tiễn kinh doanh / quản lý / xã hội."
+sections:
+  - code: SEC1
+    title: "1. GIỚI THIỆU TÌNH HUỐNG (CASE BACKGROUND)"
+    required: true
+    subsections:
+      - title: "1.1. Tóm tắt tình huống và bối cảnh chung"
+      - title: "1.2. Các nhân vật / tổ chức chính trong tình huống"
+      - title: "1.3. Xác định vấn đề cốt lõi cần giải quyết"
+
+  - code: SEC2
+    title: "2. PHÂN TÍCH VẤN ĐỀ VÀ NGUYÊN NHÂN (DIAGNOSIS & ANALYSIS)"
+    required: true
+    subsections:
+      - title: "2.1. Ứng dụng khung lý thuyết để phân tích (SWOT, PESTEL, 5 Forces...)"
+      - title: "2.2. Phân tích nguyên nhân sâu xa của vấn đề (Root Cause Analysis)"
+      - title: "2.3. Đánh giá tác động của vấn đề đến tổ chức"
+
+  - code: SEC3
+    title: "3. LỰA CHỌN VÀ ĐÁNH GIÁ CÁC GIẢI PHÁP (ALTERNATIVE SOLUTIONS)"
+    required: true
+    subsections:
+      - title: "3.1. Đề xuất các phương án giải quyết (Phương án A, B, C)"
+      - title: "3.2. Đánh giá ưu / nhược điểm của từng phương án"
+      - title: "3.3. Lựa chọn phương án tối ưu và căn cứ lựa chọn"
+
+  - code: SEC4
+    title: "4. KẾ HOẠCH TRIỂN KHAI VÀ QUẢN TRỊ RỦI RO (IMPLEMENTATION PLAN)"
+    required: true
+    subsections:
+      - title: "4.1. Các bước triển khai giải pháp chọn lựa"
+      - title: "4.2. Quản trị rủi ro và phương án dự phòng"
+      - title: "4.3. Tiêu chí đo lường hiệu quả (KPIs)"
+
+  - code: SEC5
+    title: "5. KẾT LUẬN VÀ BÀI HỌC KINH NGHIỆM"
+    required: true
+    subsections:
+      - title: "Tóm tắt bài học rút ra từ tình huống"
+      - title: "Tài liệu tham khảo"

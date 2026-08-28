@@ -1,61 +1,21 @@
-import uuid
-from datetime import datetime
-
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from database import Base
+import uuid
 
-
-class AILog(Base):
+class AIUseLog(Base):
     __tablename__ = "ai_use_logs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=True, index=True)
+    agent_name = Column(String, nullable=False)
+    input_summary = Column(JSON, nullable=True)
+    output_summary = Column(JSON, nullable=True)
+    tokens_used = Column(Integer, default=0)
+    credits_charged = Column(Integer, default=0)
+    duration_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("projects.id"),
-        nullable=False,
-    )
-
-    model: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True,
-    )
-
-    action: Mapped[str] = mapped_column(
-        String,
-        nullable=False,
-    )
-
-    prompt: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    response: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    tokens_used: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=datetime.utcnow,
-        nullable=False,
-    )
-
-    project = relationship(
-        "Project",
-        back_populates="ai_use_logs",
-    )
+    user = relationship("User", back_populates="ai_use_logs")
