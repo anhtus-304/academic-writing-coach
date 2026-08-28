@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { projectApi, outlineApi, authApi, ProjectData, OutlineData, UserProfile } from "@/lib/api";
 import { OutlineEditor, OutlineNode } from "@/components/outline/OutlineEditor";
+import { TiptapEditor } from "@/components/editor/TiptapEditor";
+import { AIResponsePanel } from "@/components/editor/AIResponsePanel";
 
 function transformBackendOutlineToNodes(chapters: any): OutlineNode[] {
   if (!chapters) return [];
@@ -32,6 +34,30 @@ function transformBackendOutlineToNodes(chapters: any): OutlineNode[] {
   return [];
 }
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
+}
+
+function outlineNodesToHtml(nodes: OutlineNode[]): string {
+  return nodes
+    .map((node) => {
+      const title = escapeHtml(node.title.replace(/^•\s*/, ""));
+      const heading = node.level === 1 ? "h2" : node.level === 2 ? "h3" : "p";
+      const children = node.children?.length ? outlineNodesToHtml(node.children) : "";
+      return `<${heading}>${title}</${heading}>${children}`;
+    })
+    .join("");
+}
+
 function WorkspaceContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -46,6 +72,9 @@ function WorkspaceContent() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string>("Đã lưu");
   const [activeTab, setActiveTab] = useState<"outline" | "suggestions">("outline");
+  const [editorContent, setEditorContent] = useState("");
+  const [selectedText, setSelectedText] = useState("");
+  const [isAIResponsePanelOpen, setIsAIResponsePanelOpen] = useState(false);
 
   // Load project and outline data
   useEffect(() => {
@@ -84,6 +113,7 @@ function WorkspaceContent() {
             setOutline(outlineRes.outline);
             const nodes = transformBackendOutlineToNodes(outlineRes.outline.chapters);
             setOutlineNodes(nodes);
+            setEditorContent(outlineNodesToHtml(nodes));
           }
         }
       } catch (err) {
@@ -106,6 +136,7 @@ function WorkspaceContent() {
         setOutline(res.outline);
         const nodes = transformBackendOutlineToNodes(res.outline.chapters);
         setOutlineNodes(nodes);
+        setEditorContent(outlineNodesToHtml(nodes));
         setSaveStatus("Đã lưu dàn ý mới");
       }
     } catch (err: any) {
@@ -134,6 +165,7 @@ function WorkspaceContent() {
 
   const handleOutlineChange = (nextNodes: OutlineNode[]) => {
     setOutlineNodes(nextNodes);
+    setEditorContent(outlineNodesToHtml(nextNodes));
     setSaveStatus("Chưa lưu...");
   };
 
@@ -337,68 +369,41 @@ function WorkspaceContent() {
         </aside>
 
         {/* Center: Interactive Editor Area */}
-        <main className="flex-1 flex flex-col bg-white overflow-hidden">
-          {/* Editor Toolbar */}
-          <div className="h-12 border-b border-gray-200 flex items-center px-4 space-x-4 shrink-0 bg-white">
-            <select className="text-sm border-gray-300 rounded border px-2 py-1 outline-none text-gray-600">
-              <option>Times New Roman</option>
-              <option>Arial</option>
-            </select>
-            <div className="flex items-center border rounded px-2 py-1 space-x-2">
-              <button className="text-gray-500 hover:text-gray-800">-</button>
-              <span className="text-sm">13</span>
-              <button className="text-gray-500 hover:text-gray-800">+</button>
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12">
+            <div className="mx-auto w-full max-w-4xl">
+              <h1 className="mb-8 text-center text-2xl font-bold uppercase leading-snug text-gray-900">
+                {project?.topic}
+              </h1>
+              <TiptapEditor
+                value={editorContent}
+                onChange={setEditorContent}
+                placeholder="Bắt đầu viết nội dung..."
+                onAskAI={(text) => {
+                  setSelectedText(text);
+                  setIsAIResponsePanelOpen(true);
+                }}
+              />
             </div>
-            <div className="flex items-center space-x-3 text-gray-500">
-              <button className="font-bold hover:text-gray-800">B</button>
-              <button className="italic hover:text-gray-800">I</button>
-              <button className="underline hover:text-gray-800">U</button>
-            </div>
-            <div className="flex-1"></div>
-            <div className="text-xs text-gray-400">
-              Dự kiến: {outline?.suggestions?.total_estimated_pages || "20 trang"}
-            </div>
-          </div>
-
-          {/* Editor Document Canvas */}
-          <div className="flex-1 overflow-y-auto p-12 px-20 max-w-4xl mx-auto w-full">
-            <h1 className="text-2xl font-bold text-center mb-8 uppercase text-gray-900 leading-snug">
-              {project?.topic}
-            </h1>
-
-            {outlineNodes.length > 0 ? (
-              <div className="space-y-6">
-                {outlineNodes.map((section, idx) => (
-                  <div key={section.id} className="border-b border-gray-100 pb-4">
-                    <h2 className="text-lg font-bold text-gray-800 mb-2">
-                      {section.title}
-                    </h2>
-                    {section.children && section.children.length > 0 && (
-                      <div className="pl-4 space-y-2 mt-2">
-                        {section.children.map((sub) => (
-                          <div key={sub.id} className="text-sm font-semibold text-gray-700">
-                            {sub.title}
-                            {sub.children && sub.children.length > 0 && (
-                              <ul className="list-disc pl-5 mt-1 text-xs text-gray-600 font-normal space-y-1">
-                                {sub.children.map((point) => (
-                                  <li key={point.id}>{point.title.replace(/^•\s*/, "")}</li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-20 text-gray-400">
-                <p className="text-sm">Hãy sinh dàn ý ở thanh công cụ bên trái để bắt đầu soạn thảo nội dung.</p>
-              </div>
-            )}
           </div>
         </main>
+
+        {isAIResponsePanelOpen ? (
+          <div className="w-full shrink-0 md:w-80 lg:w-96">
+            <AIResponsePanel
+              isLoading={false}
+              error={null}
+              prompt=""
+              onPromptChange={() => undefined}
+              onGenerate={() => undefined}
+              selectedText={selectedText}
+              onClose={() => {
+                setIsAIResponsePanelOpen(false);
+                setSelectedText("");
+              }}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

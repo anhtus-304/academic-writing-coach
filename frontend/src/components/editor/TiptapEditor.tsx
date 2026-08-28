@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 
 import "@/styles/editor.css";
 import { EditorToolbar } from "./EditorToolbar";
+import { AIBubbleMenu } from "./AIBubbleMenu";
 
 type TiptapEditorProps = {
   value?: string;
@@ -18,6 +19,7 @@ type TiptapEditorProps = {
   placeholder?: string;
   className?: string;
   editable?: boolean;
+  onAskAI?: (selectedText: string) => void;
 };
 
 export function TiptapEditor({
@@ -26,6 +28,7 @@ export function TiptapEditor({
   placeholder = "Bắt đầu viết nội dung...",
   className,
   editable = true,
+  onAskAI,
 }: TiptapEditorProps) {
   const editor = useEditor({
     immediatelyRender: false,
@@ -92,6 +95,19 @@ export function TiptapEditor({
           >
             Italic
           </Button>
+          <AIBubbleMenu
+            onAskAI={() => {
+              const selectedText = editor.state.doc.textBetween(
+                editor.state.selection.from,
+                editor.state.selection.to,
+                " "
+              ).trim();
+
+              if (selectedText) {
+                onAskAI?.(selectedText);
+              }
+            }}
+          />
         </BubbleMenu>
       ) : null}
       <EditorToolbar editor={editor} />
