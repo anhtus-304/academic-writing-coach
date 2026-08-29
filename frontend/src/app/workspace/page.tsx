@@ -7,6 +7,10 @@ import { projectApi, outlineApi, authApi, ProjectData, OutlineData, UserProfile 
 import { OutlineEditor, OutlineNode } from "@/components/outline/OutlineEditor";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { AIResponsePanel } from "@/components/editor/AIResponsePanel";
+import { LiteratureList } from "@/components/literature/LiteratureList";
+import { SearchFilters } from "@/components/literature/SearchFilters";
+import { MOCK_LITERATURE_PAPERS } from "@/components/literature/mockData";
+import type { LiteratureFilters, LiteraturePaper } from "@/components/literature/types";
 
 function transformBackendOutlineToNodes(chapters: any): OutlineNode[] {
   if (!chapters) return [];
@@ -72,9 +76,30 @@ function WorkspaceContent() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string>("Đã lưu");
   const [activeTab, setActiveTab] = useState<"outline" | "suggestions">("outline");
+  const [rightPanelTab, setRightPanelTab] = useState<"literature" | "assistant">("literature");
   const [editorContent, setEditorContent] = useState("");
   const [selectedText, setSelectedText] = useState("");
   const [isAIResponsePanelOpen, setIsAIResponsePanelOpen] = useState(false);
+  const [literatureQuery, setLiteratureQuery] = useState("");
+  const [submittedLiteratureQuery, setSubmittedLiteratureQuery] = useState("");
+  const [literatureFilters, setLiteratureFilters] = useState<LiteratureFilters>({
+    year: "",
+    publicationType: "",
+    source: "",
+  });
+  const [selectedPaper, setSelectedPaper] = useState<LiteraturePaper | null>(null);
+
+  const literaturePapers = MOCK_LITERATURE_PAPERS.filter((paper) => {
+    const searchText = [paper.title, ...paper.authors, paper.abstract].filter(Boolean).join(" ").toLowerCase();
+    const matchesQuery = searchText.includes(submittedLiteratureQuery.toLowerCase());
+    const matchesYear =
+      !literatureFilters.year ||
+      (literatureFilters.year === "2020s" && (paper.year ?? 0) >= 2020) ||
+      (literatureFilters.year === "2010s" && (paper.year ?? 0) >= 2010 && (paper.year ?? 0) < 2020);
+    const matchesType = !literatureFilters.publicationType || paper.publicationType === literatureFilters.publicationType;
+    const matchesSource = !literatureFilters.source || paper.source === literatureFilters.source;
+    return matchesQuery && matchesYear && matchesType && matchesSource;
+  });
 
   // Load project and outline data
   useEffect(() => {
@@ -382,28 +407,74 @@ function WorkspaceContent() {
                 onAskAI={(text) => {
                   setSelectedText(text);
                   setIsAIResponsePanelOpen(true);
+                  setRightPanelTab("assistant");
                 }}
               />
             </div>
           </div>
         </main>
 
-        {isAIResponsePanelOpen ? (
-          <div className="w-full shrink-0 md:w-80 lg:w-96">
-            <AIResponsePanel
-              isLoading={false}
-              error={null}
-              prompt=""
-              onPromptChange={() => undefined}
-              onGenerate={() => undefined}
-              selectedText={selectedText}
-              onClose={() => {
-                setIsAIResponsePanelOpen(false);
-                setSelectedText("");
-              }}
-            />
+        <aside className="hidden w-full shrink-0 flex-col border-l border-gray-200 bg-gray-50/70 md:flex md:w-80 lg:w-96">
+          <div className="flex shrink-0 border-b border-gray-200 bg-white p-2">
+            <button
+              type="button"
+              onClick={() => setRightPanelTab("literature")}
+              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition ${
+                rightPanelTab === "literature" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              Tài liệu
+            </button>
+            <button
+              type="button"
+              onClick={() => setRightPanelTab("assistant")}
+              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition ${
+                rightPanelTab === "assistant" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              AI Assistant
+            </button>
           </div>
-        ) : null}
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {rightPanelTab === "literature" ? (
+              <>
+                <SearchFilters
+                  query={literatureQuery}
+                  filters={literatureFilters}
+                  onQueryChange={setLiteratureQuery}
+                  onFiltersChange={setLiteratureFilters}
+                  onSearch={() => setSubmittedLiteratureQuery(literatureQuery.trim())}
+                  hasSearched={submittedLiteratureQuery.length > 0}
+                  hasResults={literaturePapers.length > 0}
+                />
+                <LiteratureList
+                  papers={literaturePapers}
+                  selectedPaperId={selectedPaper?.id}
+                  onSelectPaper={setSelectedPaper}
+                />
+              </>
+            ) : isAIResponsePanelOpen ? (
+              <AIResponsePanel
+                isLoading={false}
+                error={null}
+                prompt=""
+                onPromptChange={() => undefined}
+                onGenerate={() => undefined}
+                selectedText={selectedText}
+                onClose={() => {
+                  setIsAIResponsePanelOpen(false);
+                  setSelectedText("");
+                  setRightPanelTab("literature");
+                }}
+              />
+            ) : (
+              <div className="p-4 text-sm text-gray-500">
+                Chọn một đoạn văn bản trong editor rồi bấm &quot;Hỏi AI&quot; để bắt đầu.
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   );
