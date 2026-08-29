@@ -237,7 +237,139 @@ npm run start
 
 ---
 
-## 7. Kiểm thử Hệ thống (Testing)
+## 7. Literature Agent & Interactive Text Editor
+
+### Mục tiêu
+- Tìm kiếm tài liệu học thuật thật từ các nguồn bên ngoài.
+- Tóm tắt tài liệu bằng tiếng Việt để hỗ trợ người dùng đọc nhanh và chọn tài liệu phù hợp.
+- Tích hợp trình soạn thảo văn bản với menu hành động nhanh và luồng hỏi AI khi người dùng bôi đen text.
+
+### Các chức năng đã implement
+- Tìm kiếm tài liệu từ 3 nguồn chính: **Semantic Scholar**, **OpenAlex**, và **arXiv**.
+- Chuẩn hóa dữ liệu trả về về cùng một model paper để UI hiển thị thống nhất.
+- Tóm tắt nội dung tài liệu bằng tiếng Việt bằng OpenRouter / LLM.
+- Hiển thị danh sách tài liệu trong giao diện `LiteratureList`, `PaperCard`, và `SearchFilters`.
+- Chọn paper từ danh sách và chèn reference vào editor.
+- Bôi đen text trong Tiptap editor và click **Hỏi AI** để mở AIResponsePanel / side drawer.
+- Cung cấp `BubbleMenu` và `AIBubbleMenu` trong editor để thực hiện thao tác nhanh khi chọn văn bản.
+
+### 3 nguồn literature API
+Service backend hiện có thực hiện truy vấn trực tiếp đến các nguồn sau:
+
+1. **Semantic Scholar**  
+   - Endpoint: `https://api.semanticscholar.org/graph/v1/paper/search`
+   - Dữ liệu được normalize thành các trường: `id`, `title`, `authors`, `abstract`, `year`, `source`, `publicationType`, `doi`, `url`, `citationCount`.
+
+2. **OpenAlex**  
+   - Endpoint: `https://api.openalex.org/works`
+   - Dữ liệu tương tự được chuẩn hóa trong `normalize_paper_record`.
+
+3. **arXiv**  
+   - Endpoint: `https://export.arxiv.org/api/query`
+   - Dữ liệu từ XML Atom được parse và chuẩn hóa theo cùng một cấu trúc.
+
+> Tất cả 3 nguồn được gom lại trong `search_literature` trong backend, rồi được dedupe trước khi trả về frontend.
+
+### Backend API endpoints
+#### 1) GET `/api/v1/literature/search`
+Tìm kiếm tài liệu theo query text.
+
+Query parameters:
+- `query` (required): từ khóa tìm kiếm
+- `source` (optional): `semantic_scholar`, `openalex`, hoặc `arxiv`
+- `year` (optional): `2020s` hoặc `2010s`
+- `publication_type` (optional): lọc theo loại xuất bản nếu backend trả về giá trị tương ứng
+- `limit` (optional): số lượng item tối đa, mặc định `10`, giới hạn `1..20`
+
+Ví dụ:
+```http
+GET /api/v1/literature/search?query=blockchain%20agriculture&limit=5
+GET /api/v1/literature/search?query=transformer%20nlp&source=openalex&year=2020s
+```
+
+Response mẫu:
+```json
+{
+  "query": "blockchain agriculture",
+  "total_results": 5,
+  "papers": [
+    {
+      "id": "...",
+      "title": "...",
+      "authors": ["..."],
+      "abstract": "...",
+      "year": 2023,
+      "source": "semantic_scholar",
+      "publicationType": "Journal article",
+      "doi": "...",
+      "url": "https://...",
+      "citationCount": 42,
+      "raw": {}
+    }
+  ]
+}
+```
+
+#### 2) POST `/api/v1/literature/summarize`
+Tạo bản tóm tắt tiếng Việt cho paper đã chọn.
+
+Request body:
+```json
+{
+  "paper": {
+    "id": "abc123",
+    "title": "A Survey on ...",
+    "authors": ["Author A", "Author B"],
+    "abstract": "...",
+    "source": "semantic_scholar"
+  }
+}
+```
+
+Response mẫu:
+```json
+{
+  "paper_id": "abc123",
+  "summary_vi": "Tài liệu này tập trung vào ..."
+}
+```
+
+> Nếu `OPENROUTER_API_KEY` chưa được cấu hình trong `backend/.env`, backend sẽ trả về lỗi rõ ràng thay vì crash vô điều kiện.
+
+### Frontend components
+Các component hiện có trong frontend và đang được tích hợp với backend API:
+- `LiteratureList`: hiển thị danh sách paper và trạng thái loading/error/empty.
+- `PaperCard`: hiển thị thông tin tài liệu và cho phép người dùng chọn một paper.
+- `SearchFilters`: nhập query và lọc theo năm, loại xuất bản, nguồn dữ liệu.
+- `TiptapEditor`: soạn thảo nội dung bằng Tiptap.
+- `AIBubbleMenu`: nút "Hỏi AI" xuất hiện khi có text được bôi đen.
+- `AIResponsePanel`: panel/side drawer hiển thị phản hồi AI dựa trên selected text.
+
+### Editor / AI interaction flow
+Luồng hiện có trong workspace editor:
+1. Người dùng nhập query và gọi search literature.
+2. Chọn một paper từ `LiteratureList`.
+3. Gọi endpoint summarize để lấy `summary_vi`.
+4. Chọn action **chèn reference** vào bài viết.
+5. Khi bôi đen một đoạn text trong editor và click **Hỏi AI**, `onAskAI` sẽ truyền selected text tới `AIResponsePanel`.
+6. Panel AI mở ở cột phải để hiển thị mô tả/đáp án liên quan đến đoạn được chọn.
+
+### Cấu hình cần thiết
+Nếu muốn sử dụng tính năng tóm tắt tiếng Việt trong backend, cần có biến môi trường sau trong `backend/.env`:
+```env
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+DEFAULT_MODEL=deepseek/deepseek-chat
+```
+
+### Giới hạn hiện tại
+- Tính năng summarize phụ thuộc vào cấu hình `OPENROUTER_API_KEY` hợp lệ.
+- Mức độ lọc ở query/search hiện đang phản ánh các trường thực tế trả về từ các nguồn API, không phải một schema giả định riêng.
+- Cấu trúc UI/editor hiện có đã được tích hợp và kiểm tra build/type-check; tuy nhiên, README chỉ mô tả những phần có thể xác nhận từ code hiện tại.
+
+---
+
+## 8. Kiểm thử Hệ thống (Testing)
 
 ### 🔹 1. Chạy toàn bộ Test Backend (Pytest)
 Đảm bảo bạn đang ở thư mục `backend` và đã kích hoạt `venv`:
