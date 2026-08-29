@@ -8,6 +8,9 @@ export type LiteraturePaper = {
   publicationType?: string;
   doi?: string;
   url?: string;
+  citationCount?: number;
+  summaryVi?: string;
+  raw?: Record<string, unknown>;
 };
 
 export type LiteratureFilters = {

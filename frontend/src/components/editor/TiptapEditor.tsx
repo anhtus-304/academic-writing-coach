@@ -20,6 +20,8 @@ type TiptapEditorProps = {
   className?: string;
   editable?: boolean;
   onAskAI?: (selectedText: string) => void;
+  insertReferenceHtml?: string | null;
+  onReferenceInserted?: () => void;
 };
 
 export function TiptapEditor({
@@ -29,6 +31,8 @@ export function TiptapEditor({
   className,
   editable = true,
   onAskAI,
+  insertReferenceHtml,
+  onReferenceInserted,
 }: TiptapEditorProps) {
   const editor = useEditor({
     immediatelyRender: false,
@@ -68,11 +72,21 @@ export function TiptapEditor({
     }
   }, [editor, value]);
 
+  useEffect(() => {
+    if (!editor || !insertReferenceHtml) {
+      return;
+    }
+
+    editor.chain().focus().insertContent(insertReferenceHtml).run();
+    onReferenceInserted?.();
+  }, [editor, insertReferenceHtml, onReferenceInserted]);
+
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       {editor ? (
         <BubbleMenu
           editor={editor}
+          shouldShow={({ editor }) => editor.state.selection.from !== editor.state.selection.to}
           className="flex items-center gap-1 rounded-lg border border-border bg-background p-1 shadow-lg"
         >
           <Button
@@ -97,15 +111,11 @@ export function TiptapEditor({
           </Button>
           <AIBubbleMenu
             onAskAI={() => {
-              const selectedText = editor.state.doc.textBetween(
+              const text = editor.state.doc.textBetween(
                 editor.state.selection.from,
                 editor.state.selection.to,
-                " "
-              ).trim();
-
-              if (selectedText) {
-                onAskAI?.(selectedText);
-              }
+              );
+              onAskAI?.(text.trim());
             }}
           />
         </BubbleMenu>

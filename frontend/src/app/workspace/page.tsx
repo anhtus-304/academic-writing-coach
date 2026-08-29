@@ -2,15 +2,15 @@
 
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { projectApi, outlineApi, authApi, ProjectData, OutlineData, UserProfile } from "@/lib/api";
 import { OutlineEditor, OutlineNode } from "@/components/outline/OutlineEditor";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { AIResponsePanel } from "@/components/editor/AIResponsePanel";
 import { LiteratureList } from "@/components/literature/LiteratureList";
 import { SearchFilters } from "@/components/literature/SearchFilters";
-import { MOCK_LITERATURE_PAPERS } from "@/components/literature/mockData";
 import type { LiteratureFilters, LiteraturePaper } from "@/components/literature/types";
+import { literatureApi } from "@/lib/api";
 
 function transformBackendOutlineToNodes(chapters: any): OutlineNode[] {
   if (!chapters) return [];
@@ -63,7 +63,6 @@ function outlineNodesToHtml(nodes: OutlineNode[]): string {
 }
 
 function WorkspaceContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
 
@@ -88,18 +87,69 @@ function WorkspaceContent() {
     source: "",
   });
   const [selectedPaper, setSelectedPaper] = useState<LiteraturePaper | null>(null);
+  const [literaturePapers, setLiteraturePapers] = useState<LiteraturePaper[]>([]);
+  const [literatureLoading, setLiteratureLoading] = useState(false);
+  const [literatureError, setLiteratureError] = useState<string | null>(null);
+  const [summaryLoadingPaperId, setSummaryLoadingPaperId] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [insertReferenceHtml, setInsertReferenceHtml] = useState<string | null>(null);
 
-  const literaturePapers = MOCK_LITERATURE_PAPERS.filter((paper) => {
-    const searchText = [paper.title, ...paper.authors, paper.abstract].filter(Boolean).join(" ").toLowerCase();
-    const matchesQuery = searchText.includes(submittedLiteratureQuery.toLowerCase());
-    const matchesYear =
-      !literatureFilters.year ||
-      (literatureFilters.year === "2020s" && (paper.year ?? 0) >= 2020) ||
-      (literatureFilters.year === "2010s" && (paper.year ?? 0) >= 2010 && (paper.year ?? 0) < 2020);
-    const matchesType = !literatureFilters.publicationType || paper.publicationType === literatureFilters.publicationType;
-    const matchesSource = !literatureFilters.source || paper.source === literatureFilters.source;
-    return matchesQuery && matchesYear && matchesType && matchesSource;
-  });
+  const handleSearchLiterature = async () => {
+    const nextQuery = literatureQuery.trim();
+    if (!nextQuery) {
+      setLiteraturePapers([]);
+      setLiteratureError(null);
+      setSubmittedLiteratureQuery("");
+      return;
+    }
+
+    setLiteratureLoading(true);
+    setLiteratureError(null);
+    setSubmittedLiteratureQuery(nextQuery);
+
+    try {
+      const response = await literatureApi.search(nextQuery, {
+        year: literatureFilters.year,
+        publicationType: literatureFilters.publicationType,
+        source: literatureFilters.source,
+        limit: 12,
+      });
+      setLiteraturePapers(response.papers || []);
+    } catch (error: Error | unknown) {
+      setLiteraturePapers([]);
+      const message = error instanceof Error ? error.message : "Không thể tải danh sách tài liệu từ các nguồn học thuật.";
+      setLiteratureError(message);
+    } finally {
+      setLiteratureLoading(false);
+    }
+  };
+
+  const handleSummarizePaper = async (paper: LiteraturePaper) => {
+    setSummaryLoadingPaperId(paper.id);
+    setSummaryError(null);
+
+    try {
+      const response = await literatureApi.summarize(paper);
+      const updatedPaper = { ...paper, summaryVi: response.summary_vi };
+      setSelectedPaper(updatedPaper);
+      setLiteraturePapers((current) => current.map((item) => (item.id === paper.id ? updatedPaper : item)));
+    } catch (error: unknown) {
+      setSummaryError(
+        error instanceof Error
+          ? error.message
+          : "Không thể tóm tắt tài liệu bằng AI. Vui lòng thử lại sau."
+      );
+    } finally {
+      setSummaryLoadingPaperId(null);
+    }
+  };
+
+  const handleInsertPaperReference = (paper: LiteraturePaper) => {
+    const authors = paper.authors?.slice(0, 2).join(", ") || "Tác giả";
+    const year = paper.year || "n.d.";
+    const reference = `<p><strong>${paper.title}</strong> (${authors}${paper.authors && paper.authors.length > 2 ? ", et al." : ""}, ${year}). ${paper.url ? `<a href="${paper.url}" target="_blank" rel="noreferrer">${paper.url}</a>` : ""}</p>`;
+    setInsertReferenceHtml(reference);
+  };
 
   // Load project and outline data
   useEffect(() => {
@@ -404,6 +454,8 @@ function WorkspaceContent() {
                 value={editorContent}
                 onChange={setEditorContent}
                 placeholder="Bắt đầu viết nội dung..."
+                insertReferenceHtml={insertReferenceHtml}
+                onReferenceInserted={() => setInsertReferenceHtml(null)}
                 onAskAI={(text) => {
                   setSelectedText(text);
                   setIsAIResponsePanelOpen(true);
@@ -444,15 +496,70 @@ function WorkspaceContent() {
                   filters={literatureFilters}
                   onQueryChange={setLiteratureQuery}
                   onFiltersChange={setLiteratureFilters}
-                  onSearch={() => setSubmittedLiteratureQuery(literatureQuery.trim())}
+                  onSearch={handleSearchLiterature}
+                  loading={literatureLoading}
                   hasSearched={submittedLiteratureQuery.length > 0}
                   hasResults={literaturePapers.length > 0}
                 />
+
+                {literatureError ? (
+                  <div className="m-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                    {literatureError}
+                  </div>
+                ) : null}
+
                 <LiteratureList
                   papers={literaturePapers}
+                  loading={literatureLoading}
+                  error={literatureError}
                   selectedPaperId={selectedPaper?.id}
                   onSelectPaper={setSelectedPaper}
                 />
+
+                {selectedPaper ? (
+                  <div className="space-y-3 border-t border-gray-200 bg-white p-3">
+                    <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-purple-700">
+                        Tài liệu đã chọn
+                      </div>
+                      <h4 className="text-sm font-semibold text-gray-900">{selectedPaper.title}</h4>
+                      <p className="mt-1 text-[11px] text-gray-600">{selectedPaper.authors.join(", ")}</p>
+                      {selectedPaper.abstract ? (
+                        <p className="mt-2 line-clamp-4 text-[11px] leading-5 text-gray-600">{selectedPaper.abstract}</p>
+                      ) : null}
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSummarizePaper(selectedPaper)}
+                          disabled={summaryLoadingPaperId === selectedPaper.id}
+                          className="rounded-md bg-purple-600 px-2.5 py-1.5 text-[11px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {summaryLoadingPaperId === selectedPaper.id ? "Đang tóm tắt..." : "Tóm tắt tiếng Việt"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInsertPaperReference(selectedPaper)}
+                          className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700"
+                        >
+                          Chèn vào bài viết
+                        </button>
+                      </div>
+
+                      {summaryError ? (
+                        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-2 py-2 text-[11px] text-red-700">
+                          {summaryError}
+                        </div>
+                      ) : null}
+
+                      {selectedPaper.summaryVi ? (
+                        <div className="mt-3 rounded-md border border-gray-200 bg-white p-2.5 text-[11px] leading-5 text-gray-700">
+                          {selectedPaper.summaryVi}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : isAIResponsePanelOpen ? (
               <AIResponsePanel

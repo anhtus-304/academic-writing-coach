@@ -82,7 +82,9 @@ export function SearchFilters({
           className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs text-gray-600 outline-none focus:border-purple-500"
         >
           <option value="">Mọi nguồn</option>
-          <option value="Demo catalog">Demo catalog</option>
+          <option value="semantic_scholar">Semantic Scholar</option>
+          <option value="openalex">OpenAlex</option>
+          <option value="arxiv">arXiv</option>
         </select>
       </div>
       {hasSearched && !loading && !hasResults ? (
