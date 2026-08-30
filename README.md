@@ -53,7 +53,6 @@ CREATE DATABASE academic_writing;
 2. Thiết lập chuỗi kết nối với tài khoản, mật khẩu và cổng (mặc định `5432`) của PostgreSQL trên máy bạn:
 > **Chuỗi kết nối tương ứng:**  
 > `DATABASE_URL=postgresql+asyncpg://<username>:<password>@localhost:5432/academic_writing`  
-> *(Ví dụ: `postgresql+asyncpg://postgres:123456@localhost:5432/academic_writing`)*
 
 ---
 
