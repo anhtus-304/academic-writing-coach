@@ -3,12 +3,21 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-from database import get_db
-from security import create_access_token
-from models.user import User
-from services.auth_service import GoogleAuthService
-from api.dependencies import get_current_user
-from config import settings
+try:
+    from backend.database import get_db
+    from backend.security import create_access_token
+    from backend.models.user import User
+    from backend.services.auth_service import GoogleAuthService
+    from backend.api.dependencies import get_current_user
+    from backend.config import settings
+except ImportError:
+    from database import get_db
+    from security import create_access_token
+    from models.user import User
+    from services.auth_service import GoogleAuthService
+    from api.dependencies import get_current_user
+    from config import settings
+
 import uuid, secrets
 
 router = APIRouter(prefix="/auth", tags=["auth"])

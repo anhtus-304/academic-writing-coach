@@ -2,10 +2,17 @@ import pytest
 import uuid
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, MagicMock
-from main import app
-from database import get_db
-from schemas.outline_schemas import AcademicOutline, OutlineSection, OutlineSubSection
-from agents.outline_agent import outline_agent
+try:
+    from backend.main import app
+    from backend.database import get_db
+    from backend.schemas.outline_schemas import AcademicOutline, OutlineSection, OutlineSubSection
+    from backend.agents.outline_agent import outline_agent
+except ImportError:
+    from main import app
+    from database import get_db
+    from schemas.outline_schemas import AcademicOutline, OutlineSection, OutlineSubSection
+    from agents.outline_agent import outline_agent
+
 
 @pytest.fixture
 def mock_outline():
@@ -56,20 +63,24 @@ class MockDBSession:
 
     async def execute(self, statement):
         mock_result = MagicMock()
-        stmt_str = str(statement)
-        if "FROM users" in stmt_str or "users." in stmt_str:
+        try:
+            stmt_str = str(statement)
+        except Exception:
+            stmt_str = repr(statement)
+        stmt_lower = stmt_str.lower()
+        if "from users" in stmt_lower or "users." in stmt_lower or "users " in stmt_lower:
             user_list = list(self.users.values())
-            # check if query matches a specific user
             mock_result.scalar_one_or_none = MagicMock(return_value=user_list[0] if user_list else None)
             mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=user_list)))
-        elif "FROM projects" in stmt_str or "projects." in stmt_str:
+        elif "from projects" in stmt_lower or "projects." in stmt_lower or "projects " in stmt_lower:
             proj_list = list(self.projects.values())
             mock_result.scalar_one_or_none = MagicMock(return_value=proj_list[0] if proj_list else None)
             mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=proj_list)))
-        elif "FROM outlines" in stmt_str or "outlines." in stmt_str:
+        elif "from outlines" in stmt_lower or "outlines." in stmt_lower or "outlines " in stmt_lower:
             out_list = list(self.outlines.values())
             mock_result.scalar_one_or_none = MagicMock(return_value=out_list[0] if out_list else None)
             mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=out_list)))
+
         else:
             mock_result.scalar_one_or_none = MagicMock(return_value=None)
             mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
@@ -97,12 +108,15 @@ class MockDBSession:
 
 @pytest.mark.asyncio
 async def test_auth_and_project_lifecycle(mock_outline, monkeypatch):
-    # Mock LLM generation in outline_agent
-    monkeypatch.setattr(
-        outline_agent,
-        "generate_outline",
-        AsyncMock(return_value=mock_outline)
-    )
+    # Mock LLM generation in OutlineAgent class
+    try:
+        from backend.agents.outline_agent import OutlineAgent
+        monkeypatch.setattr(OutlineAgent, "generate_outline", AsyncMock(return_value=mock_outline))
+    except ImportError:
+        from agents.outline_agent import OutlineAgent
+        monkeypatch.setattr(OutlineAgent, "generate_outline", AsyncMock(return_value=mock_outline))
+
+
 
     users_store = {}
     projects_store = {}
@@ -111,7 +125,14 @@ async def test_auth_and_project_lifecycle(mock_outline, monkeypatch):
     async def override_get_db():
         yield MockDBSession(users_store, projects_store, outlines_store)
 
-    app.dependency_overrides[get_db] = override_get_db
+    try:
+        from backend.database import get_db as backend_get_db
+        app.dependency_overrides[backend_get_db] = override_get_db
+    except ImportError:
+        pass
+    from database import get_db as bare_get_db
+    app.dependency_overrides[bare_get_db] = override_get_db
+
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

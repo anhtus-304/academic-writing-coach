@@ -1,9 +1,16 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from api.dependencies import get_current_user
-from database import get_db
-from models.user import User
-from services.credit_service import get_credit_balance
+try:
+    from backend.api.dependencies import get_current_user
+    from backend.database import get_db
+    from backend.models.user import User
+    from backend.services.credit_service import get_credit_balance
+except ImportError:
+    from api.dependencies import get_current_user
+    from database import get_db
+    from models.user import User
+    from services.credit_service import get_credit_balance
+
 
 router = APIRouter(prefix="/credits", tags=["credits"])
 

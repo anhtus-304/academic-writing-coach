@@ -1,7 +1,12 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from models.project import Project
-from schemas.project_schemas import ProjectCreate, ProjectUpdate
+try:
+    from backend.models.project import Project
+    from backend.schemas.project_schemas import ProjectCreate, ProjectUpdate
+except ImportError:
+    from models.project import Project
+    from schemas.project_schemas import ProjectCreate, ProjectUpdate
+
 import uuid
 
 from datetime import datetime, timezone
@@ -57,7 +62,12 @@ async def delete_project(db: AsyncSession, project: Project) -> None:
 
 
 async def get_project_outline(db: AsyncSession, project_id: str, user_id: str):
-    from models.outline import Outline
+    try:
+        from backend.models.outline import Outline
+    except ImportError:
+        from models.outline import Outline
+
+
     project = await get_project(db, project_id, user_id)
     if not project:
         return None
@@ -74,8 +84,13 @@ async def generate_project_outline(
     template_id: str | None = None,
     user_requirements: str | None = None
 ):
-    from models.outline import Outline
-    from agents.outline_agent import outline_agent
+    try:
+        from backend.models.outline import Outline
+        from backend.agents.outline_agent import outline_agent
+    except ImportError:
+        from models.outline import Outline
+        from agents.outline_agent import outline_agent
+
 
     project = await get_project(db, project_id, user_id)
     if not project:
@@ -137,7 +152,11 @@ async def update_project_outline(
     chapters_data: dict | list,
     suggestions_data: dict | None = None
 ):
-    from models.outline import Outline
+    try:
+        from backend.models.outline import Outline
+    except ImportError:
+        from models.outline import Outline
+
     project = await get_project(db, project_id, user_id)
     if not project:
         return None

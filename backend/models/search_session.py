@@ -1,13 +1,20 @@
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from database import Base
+
+try:
+    from backend.database import Base
+except ImportError:
+    from database import Base
+
 import uuid
 
 class SearchSession(Base):
     __tablename__ = "search_sessions"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
     project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
     query = Column(String, nullable=False)
     filters = Column(JSON, nullable=True)
@@ -17,3 +24,4 @@ class SearchSession(Base):
 
     project = relationship("Project", back_populates="search_sessions")
     cached_papers = relationship("CachedPaper", back_populates="session", cascade="all, delete-orphan")
+

@@ -44,3 +44,34 @@ class SearchResponseSchema(BaseModel):
     query: str = Field(..., description="Original search query")
     total_results: int = Field(..., description="Total aggregated papers returned")
     papers: List[PaperSchema] = Field(default_factory=list, description="List of standardized paper objects")
+
+
+class SearchQueryItem(BaseModel):
+    query: str = Field(..., description="Target search query string")
+    language: str = Field("en", description="Language of query: 'en' or 'vi'")
+    target_aspect: Optional[str] = Field(None, description="Aspect or section of research targeted by this query")
+
+
+class QueryGeneratorRequest(BaseModel):
+    topic: str = Field(..., description="Main research topic or title")
+    outline: Optional[str] = Field(None, description="Structured outline or section breakdown")
+    num_queries: int = Field(5, ge=3, le=5, description="Number of search queries to generate (3-5)")
+
+
+class QueryGeneratorResponse(BaseModel):
+    queries: List[str] = Field(..., description="List of 3-5 search query strings (English and Vietnamese)")
+    search_queries: List[SearchQueryItem] = Field(default_factory=list, description="Detailed list of generated queries")
+    explanation: Optional[str] = Field(None, description="Brief rationale for generated queries")
+
+
+class PaperSummaryRequest(BaseModel):
+    title: str = Field(..., description="Title of the paper")
+    abstract: str = Field(..., description="Abstract text of the paper")
+    topic: Optional[str] = Field(None, description="User's research topic for relevance scoring")
+
+
+class PaperSummaryResponse(BaseModel):
+    summary_vi: str = Field(..., description="Concise 2-3 sentence Vietnamese summary of abstract")
+    relevance_score: float = Field(..., ge=0.0, le=1.0, description="Relevance score from 0.0 to 1.0 relative to research topic")
+    key_findings: Optional[List[str]] = Field(default_factory=list, description="1-3 key takeaways or findings")
+
