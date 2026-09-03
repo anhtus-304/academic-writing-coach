@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import StepperBar from '@/components/StepperBar';
+import CreditBalance from '@/components/CreditBalance';
+import AIUseLog from '@/components/AIUseLog';
 
 export default function LandingPage() {
   return (
@@ -19,7 +22,10 @@ export default function LandingPage() {
             <Link href="/pricing" className="hover:text-purple-600 transition">Bảng giá</Link>
             <Link href="#" className="hover:text-purple-600 transition">Tài liệu hướng dẫn</Link>
           </div>
+          
+          {/* ĐÃ THÊM CREDIT BALANCE VÀO ĐÂY */}
           <div className="flex items-center space-x-4">
+            <CreditBalance />
             <Link href="/auth/signin" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Đăng nhập</Link>
             <Link href="/auth/signup" className="bg-purple-600 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-purple-700 transition shadow-md hover:shadow-lg">Bắt đầu miễn phí</Link>
           </div>
@@ -27,7 +33,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col items-center text-center flex-grow">
+      <section className="pt-32 pb-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col items-center text-center flex-grow">
         <div className="inline-flex items-center bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-sm font-medium mb-6 border border-purple-100">
           <span className="flex h-2 w-2 relative mr-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
@@ -56,39 +62,21 @@ export default function LandingPage() {
             Xem Video Demo
           </button>
         </div>
+      </section>
 
-        {/* Mockup Preview Image */}
-        <div className="mt-16 w-full max-w-5xl rounded-2xl overflow-hidden border border-gray-200 shadow-2xl relative">
-          <div className="bg-gray-100 h-8 w-full flex items-center px-4 space-x-2 border-b border-gray-200">
-            <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-            <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-            <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+      {/* ĐÃ THÊM KHU VỰC DEMO TASK 14 VÀO ĐÂY */}
+      <section className="py-12 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-6 p-8 border-2 border-dashed border-purple-200 rounded-2xl bg-purple-50/30">
+          <div className="text-center mb-4">
+            <h2 className="text-2xl font-bold text-purple-800">Khu vực Demo Giao Diện (Task 14)</h2>
+            <p className="text-gray-500 text-sm">Thanh tiến trình và Báo cáo sử dụng AI</p>
           </div>
-          <div className="bg-white h-[400px] flex">
-            <div className="w-1/4 border-r border-gray-100 bg-gray-50/50 p-4">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-6"></div>
-              <div className="space-y-3">
-                <div className="h-8 bg-purple-100 rounded"></div>
-                <div className="h-8 bg-gray-100 rounded"></div>
-                <div className="h-8 bg-gray-100 rounded"></div>
-              </div>
-            </div>
-            <div className="w-2/4 p-8">
-              <div className="h-6 bg-gray-200 rounded w-3/4 mb-8 mx-auto"></div>
-              <div className="space-y-4">
-                <div className="h-3 bg-gray-100 rounded w-full"></div>
-                <div className="h-3 bg-gray-100 rounded w-full"></div>
-                <div className="h-3 bg-gray-100 rounded w-5/6"></div>
-              </div>
-            </div>
-            <div className="w-1/4 border-l border-gray-100 p-4">
-              <div className="h-8 bg-gray-100 rounded w-full mb-6"></div>
-              <div className="space-y-4">
-                <div className="h-24 border border-gray-200 rounded"></div>
-                <div className="h-24 border border-gray-200 rounded"></div>
-              </div>
-            </div>
-          </div>
+          
+          {/* Thanh Stepper Bar */}
+          <StepperBar />
+
+          {/* Bảng Lịch sử AI Use Log */}
+          <AIUseLog />
         </div>
       </section>
 
