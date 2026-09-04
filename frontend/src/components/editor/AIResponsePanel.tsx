@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Sparkles, Wand2 } from "lucide-react";
+import { Loader2, Sparkles, Wand2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { OutlineNode } from "@/components/outline/OutlineEditor";
@@ -16,6 +16,8 @@ type AIResponsePanelProps = {
   onApply?: () => void;
   result?: OutlineNode[] | null;
   defaultActionLabel?: string;
+  selectedText?: string;
+  onClose?: () => void;
 };
 
 export function AIResponsePanel({
@@ -29,7 +31,40 @@ export function AIResponsePanel({
   onApply,
   result,
   defaultActionLabel = "Generate",
+  selectedText,
+  onClose,
 }: AIResponsePanelProps) {
+  if (selectedText !== undefined) {
+    return (
+      <aside className="flex h-full flex-col border-l border-border bg-card p-4 shadow-sm">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">AI Assistant</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Phân tích đoạn văn bản đã chọn</p>
+          </div>
+          {onClose ? (
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Đóng AI Assistant" title="Đóng">
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Đoạn văn bản được chọn
+          </p>
+          <blockquote className="border-l-2 border-primary pl-3 text-sm leading-6 text-foreground">
+            &quot;{selectedText}&quot;
+          </blockquote>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+          Sẵn sàng phân tích đoạn văn bản này.
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">

@@ -1,5 +1,7 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+import type { LiteraturePaper } from "@/components/literature/types";
+
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token") || localStorage.getItem("access_token");
@@ -145,5 +147,32 @@ export const outlineApi = {
         chapters,
         suggestions,
       }),
+    }),
+};
+
+export interface LiteratureSearchResponse {
+  query: string;
+  total_results: number;
+  papers: LiteraturePaper[];
+}
+
+export interface LiteratureSummaryResponse {
+  paper_id: string;
+  summary_vi: string;
+}
+
+export const literatureApi = {
+  search: (query: string, filters?: { year?: string; publicationType?: string; source?: string; limit?: number }) => {
+    const params = new URLSearchParams({ query });
+    if (filters?.year) params.set("year", filters.year);
+    if (filters?.publicationType) params.set("publication_type", filters.publicationType);
+    if (filters?.source) params.set("source", filters.source);
+    if (filters?.limit) params.set("limit", String(filters.limit));
+    return apiFetch<LiteratureSearchResponse>(`/api/v1/literature/search?${params.toString()}`);
+  },
+  summarize: (paper: LiteraturePaper) =>
+    apiFetch<LiteratureSummaryResponse>("/api/v1/literature/summarize", {
+      method: "POST",
+      body: JSON.stringify({ paper }),
     }),
 };
