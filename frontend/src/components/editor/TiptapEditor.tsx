@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 
 import "@/styles/editor.css";
 import { EditorToolbar } from "./EditorToolbar";
+import { AIBubbleMenu } from "./AIBubbleMenu";
 
 type TiptapEditorProps = {
   value?: string;
@@ -18,6 +19,9 @@ type TiptapEditorProps = {
   placeholder?: string;
   className?: string;
   editable?: boolean;
+  onAskAI?: (selectedText: string) => void;
+  insertReferenceHtml?: string | null;
+  onReferenceInserted?: () => void;
 };
 
 export function TiptapEditor({
@@ -26,6 +30,9 @@ export function TiptapEditor({
   placeholder = "Bắt đầu viết nội dung...",
   className,
   editable = true,
+  onAskAI,
+  insertReferenceHtml,
+  onReferenceInserted,
 }: TiptapEditorProps) {
   const editor = useEditor({
     immediatelyRender: false,
@@ -65,11 +72,21 @@ export function TiptapEditor({
     }
   }, [editor, value]);
 
+  useEffect(() => {
+    if (!editor || !insertReferenceHtml) {
+      return;
+    }
+
+    editor.chain().focus().insertContent(insertReferenceHtml).run();
+    onReferenceInserted?.();
+  }, [editor, insertReferenceHtml, onReferenceInserted]);
+
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       {editor ? (
         <BubbleMenu
           editor={editor}
+          shouldShow={({ editor }) => editor.state.selection.from !== editor.state.selection.to}
           className="flex items-center gap-1 rounded-lg border border-border bg-background p-1 shadow-lg"
         >
           <Button
@@ -92,6 +109,15 @@ export function TiptapEditor({
           >
             Italic
           </Button>
+          <AIBubbleMenu
+            onAskAI={() => {
+              const text = editor.state.doc.textBetween(
+                editor.state.selection.from,
+                editor.state.selection.to,
+              );
+              onAskAI?.(text.trim());
+            }}
+          />
         </BubbleMenu>
       ) : null}
       <EditorToolbar editor={editor} />
