@@ -2,7 +2,7 @@ import sys
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 
 try:
     from backend.database import Base
@@ -32,6 +32,8 @@ else:
         status = Column(Enum("draft", "in_progress", "completed", name="project_status_enum"), default="draft", index=True)
         created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), server_default=func.now())
         updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=func.now())
+
+        title = synonym("topic")
 
         owner = relationship("User", back_populates="projects")
         outlines = relationship("Outline", back_populates="project", cascade="all, delete-orphan")

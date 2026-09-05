@@ -350,3 +350,136 @@ class SearchAggregator:
 
 
 search_aggregator = SearchAggregator()
+
+
+def _relevance_score(query: str, title: str, abstract: str) -> float:
+    if not query or not query.strip():
+        return 0.5
+    q_words = [w.lower() for w in re.sub(r"[^\w\s]", " ", query).split() if w.lower() not in STOP_WORDS]
+    if not q_words:
+        q_words = [w.lower() for w in query.split() if w]
+    if not q_words:
+        return 0.5
+
+    t_clean = (title or "").lower()
+    a_clean = (abstract or "").lower()
+
+    t_match = sum(1 for w in q_words if w in t_clean) / len(q_words)
+    a_match = sum(1 for w in q_words if w in a_clean) / len(q_words)
+
+    score = t_match * 0.7 + a_match * 0.3
+    if query.strip().lower() in t_clean:
+        score = max(score, 0.75)
+    return round(max(0.0, min(1.0, score)), 3)
+
+
+def _dedup_key(paper: dict) -> str:
+    doi = paper.get("doi")
+    if doi and isinstance(doi, str) and doi.strip():
+        return f"doi:{doi.strip().lower()}"
+    title = paper.get("title") or ""
+    norm = re.sub(r"\s+", " ", title.strip().lower())
+    return f"title:{norm}"
+
+
+async def search_arxiv(query: str, limit: int = 10) -> List[dict]:
+    res = await search_aggregator.arxiv_client.search(query, limit=limit)
+    out = []
+    for p in res.papers:
+        out.append({
+            "title": p.title,
+            "authors": ", ".join(a.name for a in p.authors) if p.authors else "",
+            "abstract": p.abstract or "",
+            "doi": p.doi,
+            "url": p.url,
+            "source": "arxiv",
+            "publication_year": p.year,
+            "citation_count": p.citation_count or 0,
+            "summary": p.summary_vi,
+            "relevance_score": p.relevance_score,
+        })
+    return out
+
+
+async def search_openalex(query: str, limit: int = 10) -> List[dict]:
+    res = await search_aggregator.openalex_client.search(query, limit=limit)
+    out = []
+    for p in res.papers:
+        out.append({
+            "title": p.title,
+            "authors": ", ".join(a.name for a in p.authors) if p.authors else "",
+            "abstract": p.abstract or "",
+            "doi": p.doi,
+            "url": p.url,
+            "source": "openalex",
+            "publication_year": p.year,
+            "citation_count": p.citation_count or 0,
+            "summary": p.summary_vi,
+            "relevance_score": p.relevance_score,
+        })
+    return out
+
+
+async def search_semantic_scholar(query: str, limit: int = 10) -> List[dict]:
+    res = await search_aggregator.scholar_client.search(query, limit=limit)
+    out = []
+    for p in res.papers:
+        out.append({
+            "title": p.title,
+            "authors": ", ".join(a.name for a in p.authors) if p.authors else "",
+            "abstract": p.abstract or "",
+            "doi": p.doi,
+            "url": p.url,
+            "source": "semantic_scholar",
+            "publication_year": p.year,
+            "citation_count": p.citation_count or 0,
+            "summary": p.summary_vi,
+            "relevance_score": p.relevance_score,
+        })
+    return out
+
+
+async def search_all(
+    query: str,
+    limit: int = 10,
+    sources: Optional[List[str]] = None,
+) -> List[dict]:
+    selected_sources = [s.lower() for s in sources] if sources else ["arxiv", "openalex", "semantic_scholar"]
+    coros = []
+    if "arxiv" in selected_sources:
+        import services.search_aggregator as _self
+        coros.append(_self.search_arxiv(query, limit))
+    if "openalex" in selected_sources:
+        import services.search_aggregator as _self
+        coros.append(_self.search_openalex(query, limit))
+    if "semantic_scholar" in selected_sources:
+        import services.search_aggregator as _self
+        coros.append(_self.search_semantic_scholar(query, limit))
+
+    if not coros:
+        return []
+
+    results_lists = await asyncio.gather(*coros, return_exceptions=True)
+    all_papers: List[dict] = []
+    for r in results_lists:
+        if isinstance(r, list):
+            all_papers.extend(r)
+
+    # Deduplicate: if duplicate, keep one with higher citation_count
+    dedup_map: dict[str, dict] = {}
+    for p in all_papers:
+        k = _dedup_key(p)
+        if k in dedup_map:
+            existing = dedup_map[k]
+            if (p.get("citation_count") or 0) > (existing.get("citation_count") or 0):
+                dedup_map[k] = p
+        else:
+            dedup_map[k] = p
+
+    unique = list(dedup_map.values())
+    for p in unique:
+        if p.get("relevance_score") is None:
+            p["relevance_score"] = _relevance_score(query, p.get("title", ""), p.get("abstract", ""))
+
+    unique.sort(key=lambda x: (x.get("relevance_score") or 0.0, x.get("citation_count") or 0), reverse=True)
+    return unique[:limit]

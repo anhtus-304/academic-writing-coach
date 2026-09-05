@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -74,4 +74,29 @@ class PaperSummaryResponse(BaseModel):
     summary_vi: str = Field(..., description="Concise 2-3 sentence Vietnamese summary of abstract")
     relevance_score: float = Field(..., ge=0.0, le=1.0, description="Relevance score from 0.0 to 1.0 relative to research topic")
     key_findings: Optional[List[str]] = Field(default_factory=list, description="1-3 key takeaways or findings")
+
+
+class LiteratureSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="Search query string")
+    filters: Optional[dict] = Field(default=None, description="Optional search filters: source, min_year")
+
+
+class PaperResponse(BaseModel):
+    id: str
+    title: str
+    authors: Optional[Any] = None
+    year: Optional[int] = None
+    source: Optional[str] = None
+    doi: Optional[str] = None
+    url: Optional[str] = None
+    abstract: Optional[str] = None
+    summary: Optional[str] = None
+    citation_count: Optional[int] = 0
+    relevance_score: Optional[float] = None
+
+
+class LiteratureSearchResponse(BaseModel):
+    search_session_id: str
+    cached: bool
+    papers: List[PaperResponse] = Field(default_factory=list)
 

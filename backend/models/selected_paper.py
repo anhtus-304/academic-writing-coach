@@ -7,22 +7,28 @@ try:
 except ImportError:
     from database import Base
 
+import sys
 import uuid
 
-class SelectedPaper(Base):
-    __tablename__ = "selected_papers"
-    __table_args__ = {"extend_existing": True}
+if "backend.models.selected_paper" in sys.modules and __name__ == "models.selected_paper":
+    SelectedPaper = sys.modules["backend.models.selected_paper"].SelectedPaper
+elif "models.selected_paper" in sys.modules and __name__ == "backend.models.selected_paper":
+    SelectedPaper = sys.modules["models.selected_paper"].SelectedPaper
+else:
+    class SelectedPaper(Base):
+        __tablename__ = "selected_papers"
+        __table_args__ = {"extend_existing": True}
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+        id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
-    cached_paper_id = Column(String, ForeignKey("cached_papers.id"), nullable=False)
-    relevant_sections = Column(JSON, nullable=True)
-    citation_formatted = Column(Text, nullable=True)
-    used_in_draft = Column(Boolean, default=False)
-    notes = Column(Text, nullable=True)
-    selected_at = Column(DateTime(timezone=True), server_default=func.now())
+        project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+        cached_paper_id = Column(String, ForeignKey("cached_papers.id"), nullable=False)
+        relevant_sections = Column(JSON, nullable=True)
+        citation_formatted = Column(Text, nullable=True)
+        used_in_draft = Column(Boolean, default=False)
+        notes = Column(Text, nullable=True)
+        selected_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    project = relationship("Project", back_populates="selected_papers")
-    cached_paper = relationship("CachedPaper", back_populates="selected_papers")
+        project = relationship("Project", back_populates="selected_papers")
+        cached_paper = relationship("CachedPaper", back_populates="selected_papers")
 
