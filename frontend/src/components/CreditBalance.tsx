@@ -1,43 +1,59 @@
 'use client';
-import React, { useState } from 'react';
 
-export function CreditBalance() {
-  const [isOpen, setIsOpen] = useState(false);
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { creditApi } from '@/lib/api';
+
+interface CreditBalanceProps {
+  initialBalance?: number;
+  refreshTrigger?: number | string;
+}
+
+export function CreditBalance({ initialBalance, refreshTrigger }: CreditBalanceProps) {
+  const router = useRouter();
+  const [balance, setBalance] = useState<number | null>(initialBalance !== undefined ? initialBalance : null);
+  const [loading, setLoading] = useState(initialBalance === undefined);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchBalance() {
+      try {
+        const res = await creditApi.getBalance();
+        if (isMounted) {
+          setBalance(res.balance);
+        }
+      } catch {
+        // Fallback to default initial or 0 if unauthenticated
+        if (isMounted) {
+          setBalance((prev) => (prev === null ? 100 : prev));
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    fetchBalance();
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshTrigger]);
+
+  const handleNavigateToPricing = () => {
+    router.push('/pricing');
+  };
 
   return (
-    <div className="relative">
-      <button 
-        onClick={() => setIsOpen(true)}
-        className="bg-yellow-100 border border-yellow-300 text-yellow-700 px-4 py-2 rounded-full font-bold hover:bg-yellow-200 transition"
-      >
-        💎 Số dư: 150 Credits
-      </button>
-
-      {isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-lg w-[400px]">
-            <h2 className="text-xl font-bold mb-4 text-center">Nạp thêm Credit</h2>
-            <p className="text-gray-500 text-sm mb-4 text-center">(Giao diện Mockup)</p>
-            
-            <div className="flex flex-col gap-3">
-              <button className="border-2 border-gray-200 text-gray-700 p-3 rounded-lg hover:border-blue-500 hover:text-blue-600 transition">
-                Gói Cơ bản: 50.000đ = 100 Credits
-              </button>
-              <button className="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition font-bold">
-                Gói Pro: 100.000đ = 250 Credits (Khuyên dùng)
-              </button>
-            </div>
-
-            <button 
-              onClick={() => setIsOpen(false)}
-              className="mt-6 w-full text-gray-500 hover:text-gray-800 underline"
-            >
-              Đóng lại
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    <button
+      onClick={handleNavigateToPricing}
+      title="Bấm để xem các gói nạp thêm Credit"
+      className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-sm transition active:scale-95"
+    >
+      <span className="text-sm">🪙</span>
+      <span>{loading ? 'Đang tải...' : `${balance ?? 0} Credits`}</span>
+      <span className="text-[10px] bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded-full font-medium ml-1">
+        + Nạp
+      </span>
+    </button>
   );
 }
 

@@ -417,10 +417,12 @@ async def search_direct_literature(
     query: str,
     limit: int = 10,
     sources: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
-    """Direct multi-source literature search for Workspace UI and fast retrieval."""
+    enable_semantic_expansion: bool = True,
+    return_expanded_queries: bool = False,
+) -> Any:
+    """Direct multi-source literature search for Workspace UI and fast retrieval with semantic expansion."""
     if not query or not query.strip():
-        return []
+        return ([], []) if return_expanded_queries else []
 
     selected_sources = sources or VALID_SOURCES
     search_sources = [source.lower() for source in selected_sources if source.lower() in VALID_SOURCES]
@@ -430,13 +432,53 @@ async def search_direct_literature(
         "arxiv": _fetch_arxiv,
     }
 
-    aggregated: List[Dict[str, Any]] = []
-    for source_name in search_sources:
+    expanded_queries: List[str] = [query.strip()]
+
+    # If semantic expansion is enabled, generate 3-5 academic queries using LiteratureAgent
+    if enable_semantic_expansion:
         try:
-            results = await tasks[source_name](query.strip(), limit=limit)
-            aggregated.extend(results)
+            try:
+                from backend.agents.literature_agent import literature_agent
+            except ImportError:
+                from agents.literature_agent import literature_agent
+
+            gen_res = await literature_agent.generate_queries(topic=query.strip(), num_queries=3)
+            generated = [q.strip() for q in (gen_res.queries or []) if q and q.strip()]
+            if not generated and gen_res.search_queries:
+                generated = [item.query.strip() for item in gen_res.search_queries if item.query and item.query.strip()]
+            for gq in generated:
+                if gq.lower() not in [eq.lower() for eq in expanded_queries]:
+                    expanded_queries.append(gq)
         except Exception as exc:
-            logger.warning("Failed to fetch literature from %s: %s", source_name, exc)
+            logger.warning("Semantic query expansion fallback: %s", exc)
+
+    queries_to_search = expanded_queries[:3]  # Search top queries concurrently
+
+    async def fetch_source_queries(source_name: str) -> List[Dict[str, Any]]:
+        source_results: List[Dict[str, Any]] = []
+        for q in queries_to_search:
+            try:
+                res = await tasks[source_name](q, limit=limit)
+                source_results.extend(res)
+            except Exception as exc:
+                logger.warning("Failed to fetch literature from %s for query '%s': %s", source_name, q, exc)
+        return source_results
+
+    fetch_tasks = [fetch_source_queries(s) for s in search_sources if s in tasks]
+    gathered = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+    aggregated: List[Dict[str, Any]] = []
+    for item in gathered:
+        if isinstance(item, list):
+            aggregated.extend(item)
+
+    try:
+        from backend.services.search_aggregator import _relevance_score
+    except ImportError:
+        try:
+            from services.search_aggregator import _relevance_score
+        except ImportError:
+            def _relevance_score(q, t, a): return 0.5
 
     seen: set[str] = set()
     deduplicated: List[Dict[str, Any]] = []
@@ -445,9 +487,20 @@ async def search_direct_literature(
         if not key or key in seen:
             continue
         seen.add(key)
+        rel = _relevance_score(query, item.get("title") or "", item.get("abstract") or "")
+        item["relevanceScore"] = round(rel, 2)
         deduplicated.append(item)
 
-    return deduplicated[:limit * 3]
+    # Sort by relevanceScore and citationCount descending
+    deduplicated.sort(
+        key=lambda x: (x.get("relevanceScore") or 0.0, x.get("citationCount") or x.get("citation_count") or 0),
+        reverse=True,
+    )
+
+    final_papers = deduplicated[:limit * 2]
+    if return_expanded_queries:
+        return final_papers, expanded_queries
+    return final_papers
 
 
 async def summarize_paper(paper: Dict[str, Any]) -> str:

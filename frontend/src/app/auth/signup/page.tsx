@@ -24,8 +24,9 @@ export default function SignUpPage() {
       const res = await authApi.devLogin(email, name);
       setAuthToken(res.access_token);
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Đăng ký thất bại. Hãy kiểm tra Backend server.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Đăng ký thất bại. Hãy kiểm tra Backend server.";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -34,6 +35,19 @@ export default function SignUpPage() {
   return (
     <div className="bg-gray-50 min-h-screen flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-lg border border-gray-100 p-8">
+        {/* Back to Home Link */}
+        <div className="mb-4">
+          <Link
+            href="/"
+            className="inline-flex items-center text-xs font-medium text-gray-500 hover:text-purple-600 transition group"
+          >
+            <svg className="w-4 h-4 mr-1 text-gray-400 group-hover:text-purple-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Quay lại trang chủ
+          </Link>
+        </div>
+
         {/* Logo */}
         <div className="flex justify-center mb-6">
           <Link href="/">

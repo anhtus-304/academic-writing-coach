@@ -83,8 +83,8 @@ export interface OutlineData {
   id: string;
   project_id: string;
   title: string;
-  chapters: any;
-  suggestions?: any;
+  chapters: unknown;
+  suggestions?: Record<string, unknown>;
   template_source?: string;
   version: number;
   generated_at?: string;
@@ -140,7 +140,7 @@ export const outlineApi = {
         user_requirements: userRequirements,
       }),
     }),
-  update: (projectId: string, chapters: any, suggestions?: any) =>
+  update: (projectId: string, chapters: unknown, suggestions?: Record<string, unknown>) =>
     apiFetch<{ success: boolean; outline: OutlineData }>(`/api/v1/projects/${projectId}/outline`, {
       method: "PUT",
       body: JSON.stringify({
@@ -152,6 +152,7 @@ export const outlineApi = {
 
 export interface LiteratureSearchResponse {
   query: string;
+  expanded_queries?: string[];
   total_results: number;
   papers: LiteraturePaper[];
 }
@@ -162,17 +163,81 @@ export interface LiteratureSummaryResponse {
 }
 
 export const literatureApi = {
-  search: (query: string, filters?: { year?: string; publicationType?: string; source?: string; limit?: number }) => {
+  search: (
+    query: string,
+    filters?: {
+      year?: string;
+      publicationType?: string;
+      source?: string;
+      limit?: number;
+      enableSemanticExpansion?: boolean;
+    }
+  ) => {
     const params = new URLSearchParams({ query });
     if (filters?.year) params.set("year", filters.year);
     if (filters?.publicationType) params.set("publication_type", filters.publicationType);
     if (filters?.source) params.set("source", filters.source);
     if (filters?.limit) params.set("limit", String(filters.limit));
+    if (filters?.enableSemanticExpansion !== undefined) {
+      params.set("enable_semantic_expansion", String(filters.enableSemanticExpansion));
+    }
     return apiFetch<LiteratureSearchResponse>(`/api/v1/literature/search?${params.toString()}`);
   },
   summarize: (paper: LiteraturePaper) =>
     apiFetch<LiteratureSummaryResponse>("/api/v1/literature/summarize", {
       method: "POST",
       body: JSON.stringify({ paper }),
+    }),
+};
+
+export interface CreditBalanceResponse {
+  balance: number;
+}
+
+export interface AIUseLogItem {
+  id: string;
+  agent_name: string;
+  tokens_used: number;
+  credits_charged: number;
+  duration_ms?: number;
+  project_id?: string;
+  created_at?: string;
+}
+
+export interface CreditTransactionItem {
+  id: string;
+  type: string;
+  amount: number;
+  balance_after: number;
+  description: string;
+  created_at?: string;
+}
+
+export const creditApi = {
+  getBalance: () => apiFetch<CreditBalanceResponse>("/api/v1/credits/balance"),
+  getLogs: (limit = 20) => apiFetch<AIUseLogItem[]>(`/api/v1/credits/logs?limit=${limit}`),
+  getTransactions: (limit = 20) => apiFetch<CreditTransactionItem[]>(`/api/v1/credits/transactions?limit=${limit}`),
+};
+
+export interface AskAIRequestPayload {
+  selected_text: string;
+  action: "explain" | "summarize" | "academic_rewrite" | "critique" | "custom" | string;
+  custom_prompt?: string;
+  project_id?: string;
+}
+
+export interface AskAIResponseData {
+  action: string;
+  selected_text: string;
+  response: string;
+  tokens_used: number;
+  credits_charged: number;
+}
+
+export const agentApi = {
+  askAI: (payload: AskAIRequestPayload) =>
+    apiFetch<AskAIResponseData>("/api/v1/agents/ask", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 };

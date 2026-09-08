@@ -32,9 +32,9 @@ export default function DashboardPage() {
         // Fetch user's project list
         const projectList = await projectApi.list().catch(() => []);
         setProjects(projectList);
-      } catch (err) {
-        console.warn("Chưa xác thực hoặc phiên đăng nhập hết hạn, chuyển hướng tới signin:", err);
-        router.push("/auth/signin");
+      } catch {
+        // Unauthenticated or session expired: silent redirect to signin
+        router.replace("/auth/signin");
       } finally {
         setLoading(false);
       }
@@ -74,8 +74,9 @@ export default function DashboardPage() {
 
       setIsModalOpen(false);
       router.push(`/workspace?projectId=${newProj.id}`);
-    } catch (err: any) {
-      setModalError(err.message || "Không thể tạo dự án. Hãy thử lại.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Không thể tạo dự án. Hãy thử lại.";
+      setModalError(msg);
       setCreating(false);
     }
   };
@@ -86,8 +87,9 @@ export default function DashboardPage() {
     try {
       await projectApi.delete(projectId);
       setProjects((prev) => prev.filter((p) => p.id !== projectId));
-    } catch (err: any) {
-      alert("Xóa thất bại: " + err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Xóa thất bại";
+      alert("Xóa thất bại: " + msg);
     }
   };
 
@@ -268,7 +270,7 @@ export default function DashboardPage() {
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Loại bài viết</label>
                   <select
                     value={documentType}
-                    onChange={(e: any) => setDocumentType(e.target.value)}
+                    onChange={(e) => setDocumentType(e.target.value as "tieu_luan" | "khoa_luan" | "luan_van")}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-purple-500 text-gray-800 bg-white"
                   >
                     <option value="tieu_luan">Tiểu luận (15-25 trang)</option>
@@ -281,7 +283,7 @@ export default function DashboardPage() {
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Chuẩn trích dẫn</label>
                   <select
                     value={citationStyle}
-                    onChange={(e: any) => setCitationStyle(e.target.value)}
+                    onChange={(e) => setCitationStyle(e.target.value as "apa7" | "ieee" | "bgddt")}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-purple-500 text-gray-800 bg-white"
                   >
                     <option value="apa7">APA 7th Edition</option>

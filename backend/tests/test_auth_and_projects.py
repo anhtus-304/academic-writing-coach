@@ -98,6 +98,9 @@ class MockDBSession:
     async def commit(self):
         pass
 
+    async def flush(self):
+        pass
+
     async def refresh(self, obj):
         pass
 

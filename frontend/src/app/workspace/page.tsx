@@ -9,19 +9,32 @@ import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { AIResponsePanel } from "@/components/editor/AIResponsePanel";
 import { LiteratureList } from "@/components/literature/LiteratureList";
 import { SearchFilters } from "@/components/literature/SearchFilters";
-import type { LiteratureFilters, LiteraturePaper } from "@/components/literature/types";
 import { literatureApi } from "@/lib/api";
+import { CreditBalance } from "@/components/CreditBalance";
 
-function transformBackendOutlineToNodes(chapters: any): OutlineNode[] {
+interface RawSubSection {
+  title?: string;
+  key_points?: string[];
+}
+interface RawSection {
+  title?: string;
+  subsections?: RawSubSection[];
+}
+interface RawOutlineChapters {
+  sections?: RawSection[];
+}
+
+function transformBackendOutlineToNodes(chapters: unknown): OutlineNode[] {
   if (!chapters) return [];
-  if (Array.isArray(chapters)) return chapters;
+  if (Array.isArray(chapters)) return chapters as OutlineNode[];
 
-  if (chapters.sections && Array.isArray(chapters.sections)) {
-    return chapters.sections.map((sec: any, secIdx: number) => ({
+  const obj = chapters as RawOutlineChapters;
+  if (obj.sections && Array.isArray(obj.sections)) {
+    return obj.sections.map((sec: RawSection, secIdx: number) => ({
       id: `sec-${secIdx + 1}`,
       title: sec.title || `Chương ${secIdx + 1}`,
       level: 1,
-      children: (sec.subsections || []).map((sub: any, subIdx: number) => ({
+      children: (sec.subsections || []).map((sub: RawSubSection, subIdx: number) => ({
         id: `sub-${secIdx + 1}-${subIdx + 1}`,
         title: sub.title || `Mục ${secIdx + 1}.${subIdx + 1}`,
         level: 2,
@@ -79,8 +92,10 @@ function WorkspaceContent() {
   const [editorContent, setEditorContent] = useState("");
   const [selectedText, setSelectedText] = useState("");
   const [isAIResponsePanelOpen, setIsAIResponsePanelOpen] = useState(false);
+  const [creditTrigger, setCreditTrigger] = useState(0);
   const [literatureQuery, setLiteratureQuery] = useState("");
   const [submittedLiteratureQuery, setSubmittedLiteratureQuery] = useState("");
+  const [expandedQueries, setExpandedQueries] = useState<string[]>([]);
   const [literatureFilters, setLiteratureFilters] = useState<LiteratureFilters>({
     year: "",
     publicationType: "",
@@ -98,6 +113,7 @@ function WorkspaceContent() {
     const nextQuery = literatureQuery.trim();
     if (!nextQuery) {
       setLiteraturePapers([]);
+      setExpandedQueries([]);
       setLiteratureError(null);
       setSubmittedLiteratureQuery("");
       return;
@@ -113,10 +129,13 @@ function WorkspaceContent() {
         publicationType: literatureFilters.publicationType,
         source: literatureFilters.source,
         limit: 12,
+        enableSemanticExpansion: true,
       });
       setLiteraturePapers(response.papers || []);
+      setExpandedQueries(response.expanded_queries || []);
     } catch (error: Error | unknown) {
       setLiteraturePapers([]);
+      setExpandedQueries([]);
       const message = error instanceof Error ? error.message : "Không thể tải danh sách tài liệu từ các nguồn học thuật.";
       setLiteratureError(message);
     } finally {
@@ -213,9 +232,11 @@ function WorkspaceContent() {
         setOutlineNodes(nodes);
         setEditorContent(outlineNodesToHtml(nodes));
         setSaveStatus("Đã lưu dàn ý mới");
+        setCreditTrigger((c) => c + 1);
       }
-    } catch (err: any) {
-      alert("Không thể sinh dàn ý AI: " + err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Đã có lỗi xảy ra";
+      alert("Không thể sinh dàn ý AI: " + msg);
     } finally {
       setGenerating(false);
     }
@@ -231,8 +252,9 @@ function WorkspaceContent() {
         setOutline(res.outline);
         setSaveStatus("Đã lưu");
       }
-    } catch (err: any) {
-      alert("Lưu thất bại: " + err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Đã có lỗi xảy ra";
+      alert("Lưu thất bại: " + msg);
     } finally {
       setSaving(false);
     }
@@ -275,7 +297,7 @@ function WorkspaceContent() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
           <button
             onClick={handleSaveOutline}
             disabled={saving}
@@ -283,15 +305,7 @@ function WorkspaceContent() {
           >
             {saving ? "Đang lưu..." : "💾 Lưu dàn ý"}
           </button>
-          <div className="text-sm text-gray-500">
-            <span className="font-medium text-gray-800">🪙 {user ? user.credits : 120} credits</span>
-          </div>
-          <Link
-            href="/pricing"
-            className="bg-purple-600 text-white px-3.5 py-1.5 rounded-full text-xs font-medium hover:bg-purple-700 transition"
-          >
-            Nâng cấp
-          </Link>
+          <CreditBalance initialBalance={user?.credits} refreshTrigger={creditTrigger} />
         </div>
       </header>
 
@@ -502,6 +516,25 @@ function WorkspaceContent() {
                   hasResults={literaturePapers.length > 0}
                 />
 
+                {expandedQueries && expandedQueries.length > 0 ? (
+                  <div className="mx-3 mt-2 rounded-xl border border-purple-100 bg-purple-50/60 p-2.5 text-xs">
+                    <div className="font-semibold text-purple-900 mb-1.5 flex items-center gap-1.5">
+                      <span className="text-purple-600">✨</span>
+                      <span>Từ khóa học thuật đã mở rộng:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {expandedQueries.map((eq, idx) => (
+                        <span
+                          key={idx}
+                          className="bg-white border border-purple-200 text-purple-700 px-2.5 py-0.5 rounded-full text-[11px] font-medium shadow-2xs"
+                        >
+                          {eq}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {literatureError ? (
                   <div className="m-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                     {literatureError}
@@ -561,14 +594,11 @@ function WorkspaceContent() {
                   </div>
                 ) : null}
               </>
-            ) : isAIResponsePanelOpen ? (
+            ) : isAIResponsePanelOpen || rightPanelTab === "assistant" ? (
               <AIResponsePanel
-                isLoading={false}
-                error={null}
-                prompt=""
-                onPromptChange={() => undefined}
-                onGenerate={() => undefined}
-                selectedText={selectedText}
+                selectedText={selectedText || "Hãy bôi đen một câu hoặc đoạn văn bản trong Editor để AI Coach phân tích, giải thích thuật ngữ hoặc viết lại theo chuẩn học thuật."}
+                projectId={project?.id}
+                onCreditDeducted={() => setCreditTrigger((c) => c + 1)}
                 onClose={() => {
                   setIsAIResponsePanelOpen(false);
                   setSelectedText("");

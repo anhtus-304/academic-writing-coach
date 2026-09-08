@@ -84,17 +84,40 @@ async def generate_project_outline(
     template_id: str | None = None,
     user_requirements: str | None = None
 ):
+    from fastapi import HTTPException, status
     try:
         from backend.models.outline import Outline
+        from backend.models.user import User
         from backend.agents.outline_agent import outline_agent
+        from backend.services.credit_service import deduct_credits
+        from backend.services.ai_use_logger import ai_use_logger
     except ImportError:
         from models.outline import Outline
+        from models.user import User
         from agents.outline_agent import outline_agent
-
+        from services.credit_service import deduct_credits
+        from services.ai_use_logger import ai_use_logger
 
     project = await get_project(db, project_id, user_id)
     if not project:
         return None
+
+    user_res = await db.execute(select(User).where(User.id == user_id))
+    user = user_res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    credit_deducted = await deduct_credits(
+        db=db,
+        user=user,
+        amount=2,
+        description=f"Sinh dàn ý AI cho dự án: {project.topic}",
+    )
+    if not credit_deducted:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Số dư không đủ để tạo dàn ý (Cần 2 Credits). Vui lòng nạp thêm credit."
+        )
 
     academic_outline = await outline_agent.generate_outline(
         topic=project.topic,
@@ -142,6 +165,23 @@ async def generate_project_outline(
 
     await db.commit()
     await db.refresh(outline)
+
+    # Ghi nhận AI usage log
+    try:
+        await ai_use_logger.log_ai_usage(
+            agent_name="OutlineAgent",
+            tokens_used=1800,
+            user_id=user_id,
+            project_id=project_id,
+            input_summary={"topic": project.topic, "template_id": template_id},
+            output_summary={"chapters_count": len(academic_outline.chapters or [])},
+            credits_charged=2,
+            db=db,
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Failed to log outline AI usage: %s", exc)
+
     return outline
 
 

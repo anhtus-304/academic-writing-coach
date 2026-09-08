@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import StepperBar from '@/components/StepperBar';
-import CreditBalance from '@/components/CreditBalance';
 import AIUseLog from '@/components/AIUseLog';
 import { TiptapEditor } from '@/components/editor/TiptapEditor';
 
@@ -25,7 +24,6 @@ export default function LandingPage() {
           </div>
           
           <div className="flex items-center space-x-4">
-            <CreditBalance />
             <Link href="/auth/signin" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Đăng nhập</Link>
             <Link href="/auth/signup" className="bg-purple-600 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-purple-700 transition shadow-md hover:shadow-lg">Bắt đầu miễn phí</Link>
           </div>

@@ -36,6 +36,7 @@ async def search_literature_route(
     year: Optional[str] = Query(default=None),
     publication_type: Optional[str] = Query(default=None),
     limit: int = Query(default=10, ge=1, le=20),
+    enable_semantic_expansion: bool = Query(default=True),
 ):
     if not query.strip():
         raise HTTPException(status_code=400, detail="Query không được để trống")
@@ -44,7 +45,13 @@ async def search_literature_route(
     if source:
         sources = [source.lower()]
 
-    papers = await literature_service.search_direct_literature(query=query, limit=limit, sources=sources)
+    papers, expanded_queries = await literature_service.search_direct_literature(
+        query=query,
+        limit=limit,
+        sources=sources,
+        enable_semantic_expansion=enable_semantic_expansion,
+        return_expanded_queries=True,
+    )
 
     if year == "2020s":
         papers = [paper for paper in papers if paper.get("year") and paper["year"] >= 2020]
@@ -60,6 +67,7 @@ async def search_literature_route(
 
     return {
         "query": query,
+        "expanded_queries": expanded_queries,
         "total_results": len(papers),
         "papers": papers,
     }
