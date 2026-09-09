@@ -1,6 +1,6 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-import type { LiteraturePaper } from "@/components/literature/types";
+import type { LiteraturePaper, SelectedPaperItem } from "@/components/literature/types";
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -157,6 +157,28 @@ export interface LiteratureSearchResponse {
   papers: LiteraturePaper[];
 }
 
+export interface ProjectLiteratureSearchResponse {
+  search_session_id: string;
+  cached: boolean;
+  total_results: number;
+  expanded_queries?: string[];
+  papers: LiteraturePaper[];
+}
+
+export interface ProjectSelectedPapersResponse {
+  total: number;
+  selected_papers: SelectedPaperItem[];
+}
+
+export interface RecentSearchResponse {
+  has_recent: boolean;
+  search_session_id?: string;
+  query?: string;
+  total_results?: number;
+  expires_at?: string;
+  papers: LiteraturePaper[];
+}
+
 export interface LiteratureSummaryResponse {
   paper_id: string;
   summary_vi: string;
@@ -183,12 +205,74 @@ export const literatureApi = {
     }
     return apiFetch<LiteratureSearchResponse>(`/api/v1/literature/search?${params.toString()}`);
   },
+  searchInProject: (
+    projectId: string,
+    query: string,
+    filters?: {
+      year?: string;
+      publicationType?: string;
+      source?: string;
+    }
+  ) =>
+    apiFetch<ProjectLiteratureSearchResponse>(`/api/v1/projects/${projectId}/literature/search`, {
+      method: "POST",
+      body: JSON.stringify({ query, filters }),
+    }),
+  selectPaper: (
+    projectId: string,
+    payload: {
+      paper?: LiteraturePaper;
+      cached_paper_id?: string;
+      relevant_sections?: string[];
+      notes?: string;
+    }
+  ) =>
+    apiFetch<SelectedPaperItem>(`/api/v1/projects/${projectId}/literature/select`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getSelectedPapers: (projectId: string) =>
+    apiFetch<ProjectSelectedPapersResponse>(`/api/v1/projects/${projectId}/literature/selected`),
+  removeSelectedPaper: (projectId: string, selectedPaperId: string) =>
+    apiFetch<{ message: string }>(`/api/v1/projects/${projectId}/literature/selected/${selectedPaperId}`, {
+      method: "DELETE",
+    }),
+  getRecentSearch: (projectId: string) =>
+    apiFetch<RecentSearchResponse>(`/api/v1/projects/${projectId}/literature/recent-search`),
   summarize: (paper: LiteraturePaper) =>
     apiFetch<LiteratureSummaryResponse>("/api/v1/literature/summarize", {
       method: "POST",
       body: JSON.stringify({ paper }),
     }),
 };
+
+export interface MissingCitationClaim {
+  sentence: string;
+  reason: string;
+  suggested_action: string;
+}
+
+export interface CitationCheckResponse {
+  total_issues: number;
+  missing_claims: MissingCitationClaim[];
+  invalid_citations: string[];
+  verified_count: number;
+  credits_charged: number;
+}
+
+export const citationApi = {
+  checkCitations: (projectId: string, content: string, citationStyle = "apa7") =>
+    apiFetch<CitationCheckResponse>(`/api/v1/projects/${projectId}/citation/check`, {
+      method: "POST",
+      body: JSON.stringify({ content, citation_style: citationStyle }),
+    }),
+  formatCitation: (metadata: Record<string, unknown>, style = "apa7", index = 1) =>
+    apiFetch<{ in_text_citation: string; full_citation: string; style: string }>("/api/v1/citation/format", {
+      method: "POST",
+      body: JSON.stringify({ metadata, style, index }),
+    }),
+};
+
 
 export interface CreditBalanceResponse {
   balance: number;

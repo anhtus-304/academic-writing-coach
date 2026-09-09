@@ -4,7 +4,7 @@ import difflib
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional, Set
+from typing import Any, List, Optional, Set
 
 try:
     from schemas.literature_schemas import (
@@ -382,59 +382,93 @@ def _dedup_key(paper: dict) -> str:
     return f"title:{norm}"
 
 
+def _extract_authors(paper_item: Any) -> List[str]:
+    authors = getattr(paper_item, "authors", None)
+    if authors is None and isinstance(paper_item, dict):
+        authors = paper_item.get("authors")
+    if not authors:
+        return []
+    result = []
+    for a in authors:
+        if isinstance(a, str):
+            result.append(a.strip())
+        elif hasattr(a, "name") and a.name:
+            result.append(str(a.name).strip())
+        elif isinstance(a, dict) and a.get("name"):
+            result.append(str(a["name"]).strip())
+        else:
+            result.append(str(a).strip())
+    return [r for r in result if r]
+
+
 async def search_arxiv(query: str, limit: int = 10) -> List[dict]:
-    res = await search_aggregator.arxiv_client.search(query, limit=limit)
+    try:
+        res = await search_aggregator.arxiv_client.search(query, limit=limit)
+    except Exception as e:
+        logger.error(f"Arxiv search error: {e}")
+        return []
+    papers = res.papers if hasattr(res, "papers") else (res if isinstance(res, list) else [])
     out = []
-    for p in res.papers:
+    for p in papers:
         out.append({
-            "title": p.title,
-            "authors": ", ".join(a.name for a in p.authors) if p.authors else "",
-            "abstract": p.abstract or "",
-            "doi": p.doi,
-            "url": p.url,
+            "title": getattr(p, "title", "") if hasattr(p, "title") else p.get("title", ""),
+            "authors": _extract_authors(p),
+            "abstract": getattr(p, "abstract", "") if hasattr(p, "abstract") else p.get("abstract", ""),
+            "doi": getattr(p, "doi", None) if hasattr(p, "doi") else p.get("doi"),
+            "url": getattr(p, "url", None) if hasattr(p, "url") else p.get("url"),
             "source": "arxiv",
-            "publication_year": p.year,
-            "citation_count": p.citation_count or 0,
-            "summary": p.summary_vi,
-            "relevance_score": p.relevance_score,
+            "publication_year": getattr(p, "year", None) if hasattr(p, "year") else p.get("publication_year"),
+            "citation_count": (getattr(p, "citation_count", 0) if hasattr(p, "citation_count") else p.get("citation_count")) or 0,
+            "summary": getattr(p, "summary_vi", None) if hasattr(p, "summary_vi") else p.get("summary"),
+            "relevance_score": getattr(p, "relevance_score", None) if hasattr(p, "relevance_score") else p.get("relevance_score"),
         })
     return out
 
 
 async def search_openalex(query: str, limit: int = 10) -> List[dict]:
-    res = await search_aggregator.openalex_client.search(query, limit=limit)
+    try:
+        res = await search_aggregator.openalex_client.search(query, limit=limit)
+    except Exception as e:
+        logger.error(f"OpenAlex search error: {e}")
+        return []
+    papers = res.papers if hasattr(res, "papers") else (res if isinstance(res, list) else [])
     out = []
-    for p in res.papers:
+    for p in papers:
         out.append({
-            "title": p.title,
-            "authors": ", ".join(a.name for a in p.authors) if p.authors else "",
-            "abstract": p.abstract or "",
-            "doi": p.doi,
-            "url": p.url,
+            "title": getattr(p, "title", "") if hasattr(p, "title") else p.get("title", ""),
+            "authors": _extract_authors(p),
+            "abstract": getattr(p, "abstract", "") if hasattr(p, "abstract") else p.get("abstract", ""),
+            "doi": getattr(p, "doi", None) if hasattr(p, "doi") else p.get("doi"),
+            "url": getattr(p, "url", None) if hasattr(p, "url") else p.get("url"),
             "source": "openalex",
-            "publication_year": p.year,
-            "citation_count": p.citation_count or 0,
-            "summary": p.summary_vi,
-            "relevance_score": p.relevance_score,
+            "publication_year": getattr(p, "year", None) if hasattr(p, "year") else p.get("publication_year"),
+            "citation_count": (getattr(p, "citation_count", 0) if hasattr(p, "citation_count") else p.get("citation_count")) or 0,
+            "summary": getattr(p, "summary_vi", None) if hasattr(p, "summary_vi") else p.get("summary"),
+            "relevance_score": getattr(p, "relevance_score", None) if hasattr(p, "relevance_score") else p.get("relevance_score"),
         })
     return out
 
 
 async def search_semantic_scholar(query: str, limit: int = 10) -> List[dict]:
-    res = await search_aggregator.scholar_client.search(query, limit=limit)
+    try:
+        res = await search_aggregator.scholar_client.search(query, limit=limit)
+    except Exception as e:
+        logger.error(f"Semantic Scholar search error: {e}")
+        return []
+    papers = res.papers if hasattr(res, "papers") else (res if isinstance(res, list) else [])
     out = []
-    for p in res.papers:
+    for p in papers:
         out.append({
-            "title": p.title,
-            "authors": ", ".join(a.name for a in p.authors) if p.authors else "",
-            "abstract": p.abstract or "",
-            "doi": p.doi,
-            "url": p.url,
+            "title": getattr(p, "title", "") if hasattr(p, "title") else p.get("title", ""),
+            "authors": _extract_authors(p),
+            "abstract": getattr(p, "abstract", "") if hasattr(p, "abstract") else p.get("abstract", ""),
+            "doi": getattr(p, "doi", None) if hasattr(p, "doi") else p.get("doi"),
+            "url": getattr(p, "url", None) if hasattr(p, "url") else p.get("url"),
             "source": "semantic_scholar",
-            "publication_year": p.year,
-            "citation_count": p.citation_count or 0,
-            "summary": p.summary_vi,
-            "relevance_score": p.relevance_score,
+            "publication_year": getattr(p, "year", None) if hasattr(p, "year") else p.get("publication_year"),
+            "citation_count": (getattr(p, "citation_count", 0) if hasattr(p, "citation_count") else p.get("citation_count")) or 0,
+            "summary": getattr(p, "summary_vi", None) if hasattr(p, "summary_vi") else p.get("summary"),
+            "relevance_score": getattr(p, "relevance_score", None) if hasattr(p, "relevance_score") else p.get("relevance_score"),
         })
     return out
 
@@ -447,14 +481,11 @@ async def search_all(
     selected_sources = [s.lower() for s in sources] if sources else ["arxiv", "openalex", "semantic_scholar"]
     coros = []
     if "arxiv" in selected_sources:
-        import services.search_aggregator as _self
-        coros.append(_self.search_arxiv(query, limit))
+        coros.append(search_arxiv(query, limit))
     if "openalex" in selected_sources:
-        import services.search_aggregator as _self
-        coros.append(_self.search_openalex(query, limit))
+        coros.append(search_openalex(query, limit))
     if "semantic_scholar" in selected_sources:
-        import services.search_aggregator as _self
-        coros.append(_self.search_semantic_scholar(query, limit))
+        coros.append(search_semantic_scholar(query, limit))
 
     if not coros:
         return []
@@ -464,6 +495,8 @@ async def search_all(
     for r in results_lists:
         if isinstance(r, list):
             all_papers.extend(r)
+        elif isinstance(r, Exception):
+            logger.error(f"Search source error: {r}")
 
     # Deduplicate: if duplicate, keep one with higher citation_count
     dedup_map: dict[str, dict] = {}

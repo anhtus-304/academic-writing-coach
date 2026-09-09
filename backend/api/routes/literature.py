@@ -10,6 +10,10 @@ try:
     from backend.schemas.literature_schemas import (
         LiteratureSearchRequest,
         LiteratureSearchResponse,
+        ProjectSelectedPapersResponse,
+        RecentSearchResponse,
+        SelectedPaperItem,
+        SelectPaperRequest,
     )
     from backend.services import literature_service, project_service
 except ImportError:
@@ -19,6 +23,10 @@ except ImportError:
     from schemas.literature_schemas import (
         LiteratureSearchRequest,
         LiteratureSearchResponse,
+        ProjectSelectedPapersResponse,
+        RecentSearchResponse,
+        SelectedPaperItem,
+        SelectPaperRequest,
     )
     from services import literature_service, project_service
 
@@ -119,3 +127,90 @@ async def search_literature_for_project(
         current_user,
     )
     return LiteratureSearchResponse(**result)
+
+
+# -----------------------------------------------------------------------------
+# 3. Project-scoped Selected Papers Management & Recent Search Cache
+# -----------------------------------------------------------------------------
+
+@router.post("/projects/{project_id}/literature/select", response_model=SelectedPaperItem)
+async def select_paper_route(
+    project_id: str,
+    body: SelectPaperRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SelectedPaperItem:
+    project = await project_service.get_project(db, project_id, current_user.id)
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    res = await literature_service.select_paper_for_project(
+        db=db,
+        project=project,
+        paper_data=body.paper,
+        cached_paper_id=body.cached_paper_id,
+        relevant_sections=body.relevant_sections,
+        notes=body.notes,
+    )
+    return SelectedPaperItem(**res)
+
+
+@router.get("/projects/{project_id}/literature/selected", response_model=ProjectSelectedPapersResponse)
+async def get_selected_papers_route(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectSelectedPapersResponse:
+    project = await project_service.get_project(db, project_id, current_user.id)
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    res = await literature_service.get_project_selected_papers(db, project_id)
+    return ProjectSelectedPapersResponse(**res)
+
+
+@router.delete("/projects/{project_id}/literature/selected/{selected_paper_id}")
+async def remove_selected_paper_route(
+    project_id: str,
+    selected_paper_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await project_service.get_project(db, project_id, current_user.id)
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    removed = await literature_service.remove_selected_paper(db, project_id, selected_paper_id)
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tài liệu đã chọn không tồn tại hoặc đã bị xóa.",
+        )
+    return {"message": "Đã xóa tài liệu khỏi danh mục thành công"}
+
+
+@router.get("/projects/{project_id}/literature/recent-search", response_model=RecentSearchResponse)
+async def get_recent_search_route(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RecentSearchResponse:
+    project = await project_service.get_project(db, project_id, current_user.id)
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    res = await literature_service.get_recent_search_session(db, project_id)
+    return RecentSearchResponse(**res)
+

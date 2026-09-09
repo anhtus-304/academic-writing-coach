@@ -16,19 +16,28 @@ try:
     from backend.models.cached_paper import CachedPaper
     from backend.models.project import Project
     from backend.models.search_session import SearchSession
+    from backend.models.selected_paper import SelectedPaper
     from backend.models.user import User
+    from backend.services.ai_use_logger import ai_use_logger
     from backend.services.credit_service import deduct_credits
     from backend.services.llm_service import llm_service
     from backend.services.search_aggregator import search_all
+    from backend.services.citation_formatter import CitationFormatterService
+    from backend.schemas.citation_schemas import CitationMetadataSchema, CitationStyle, DocumentType
 except ImportError:
     from config import settings
     from models.cached_paper import CachedPaper
     from models.project import Project
     from models.search_session import SearchSession
+    from models.selected_paper import SelectedPaper
     from models.user import User
+    from services.ai_use_logger import ai_use_logger
     from services.credit_service import deduct_credits
     from services.llm_service import llm_service
     from services.search_aggregator import search_all
+    from services.citation_formatter import CitationFormatterService
+    from schemas.citation_schemas import CitationMetadataSchema, CitationStyle, DocumentType
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +50,7 @@ RESULTS_LIMIT = 8
 MOCK_PAPERS: list[dict[str, Any]] = [
     {
         "title": "Deep Learning Approaches for Automated Essay Scoring",
-        "authors": "Nguyen Van An, Le Thi B",
+        "authors": ["Nguyen Van An", "Le Thi B"],
         "abstract": "This paper surveys deep learning techniques applied to automated essay scoring...",
         "doi": "10.1145/example.essay.2023",
         "url": "https://doi.org/10.1145/example.essay.2023",
@@ -53,7 +62,7 @@ MOCK_PAPERS: list[dict[str, Any]] = [
     },
     {
         "title": "Large Language Models as Academic Writing Assistants: A Survey",
-        "authors": "Tran Minh C, Pham Quoc D",
+        "authors": ["Tran Minh C", "Pham Quoc D"],
         "abstract": "We review the role of large language models in supporting academic writing...",
         "doi": "10.48550/arXiv.2310.00001",
         "url": "https://arxiv.org/abs/2310.00001",
@@ -65,7 +74,7 @@ MOCK_PAPERS: list[dict[str, Any]] = [
     },
     {
         "title": "Citation Network Analysis for Academic Literature Discovery",
-        "authors": "Hoang Thanh E",
+        "authors": ["Hoang Thanh E"],
         "abstract": "This work proposes a citation-aware retrieval method to improve literature discovery...",
         "doi": "10.1016/j.example.citation.2022",
         "url": "https://doi.org/10.1016/j.example.citation.2022",
@@ -236,10 +245,26 @@ def cached_paper_to_dict(paper: Any) -> dict[str, Any]:
     year = getattr(paper, "publication_year", None)
     if year is None:
         year = getattr(paper, "year", None)
+
+    raw_authors = getattr(paper, "authors", None)
+    authors_list: list[str] = []
+    if isinstance(raw_authors, list):
+        for a in raw_authors:
+            if isinstance(a, dict):
+                name = a.get("name") or a.get("family") or a.get("full_name")
+                if name:
+                    authors_list.append(str(name).strip())
+            elif a:
+                authors_list.append(str(a).strip())
+    elif isinstance(raw_authors, str) and raw_authors.strip():
+        authors_list = [a.strip() for a in raw_authors.split(",") if a.strip()]
+    elif raw_authors:
+        authors_list = [str(raw_authors).strip()]
+
     return {
         "id": str(getattr(paper, "id", "")),
         "title": getattr(paper, "title", ""),
-        "authors": getattr(paper, "authors", ""),
+        "authors": authors_list,
         "year": year,
         "source": getattr(paper, "source", None),
         "doi": getattr(paper, "doi", None),
@@ -322,18 +347,21 @@ async def _fetch_source_papers(
 
 
 async def _summarize_papers(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Attach a Vietnamese summary to each paper via the LLM (if configured)."""
-    if hasattr(llm_service, "is_summarization_enabled"):
-        if not llm_service.is_summarization_enabled() or not papers:
-            return papers
-    elif not papers:
+    """Attach a Vietnamese summary to each paper via the LLM (if configured) or abstract snippet."""
+    if not papers:
         return papers
 
     updated: list[dict[str, Any]] = []
     for p in papers:
         summary = p.get("summary")
         if not summary and hasattr(llm_service, "summarize_paper_vietnamese"):
-            summary = await llm_service.summarize_paper_vietnamese(p.get("title", ""), p.get("abstract", ""))
+            try:
+                summary = await llm_service.summarize_paper_vietnamese(p.get("title", ""), p.get("abstract", ""))
+            except Exception:
+                summary = None
+        if not summary and p.get("abstract"):
+            abs_text = str(p["abstract"]).strip()
+            summary = abs_text[:280] + "..." if len(abs_text) > 280 else abs_text
         updated.append({**p, "summary": summary or p.get("summary")})
     return updated
 
@@ -532,6 +560,34 @@ async def summarize_paper(paper: Dict[str, Any]) -> str:
     return result.summary_vi.strip()
 
 
+def _paper_to_citation_metadata(paper_data: dict[str, Any]) -> CitationMetadataSchema:
+    authors_raw = paper_data.get("authors") or []
+    if isinstance(authors_raw, str):
+        authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
+    elif isinstance(authors_raw, list):
+        authors = [str(a).strip() for a in authors_raw if a]
+    else:
+        authors = ["Tác giả"]
+    if not authors:
+        authors = ["Tác giả"]
+
+    year = paper_data.get("year") or paper_data.get("publication_year") or 2024
+    try:
+        year_int = int(year)
+    except (ValueError, TypeError):
+        year_int = 2024
+
+    return CitationMetadataSchema(
+        title=paper_data.get("title") or "Tài liệu tham khảo",
+        authors=authors,
+        year=year_int,
+        journal=paper_data.get("publicationType") or paper_data.get("venue") or paper_data.get("source"),
+        doi=paper_data.get("doi"),
+        url=paper_data.get("url"),
+        doc_type=DocumentType.JOURNAL,
+    )
+
+
 async def search_project_literature(
     db: AsyncSession,
     project: Project,
@@ -543,7 +599,7 @@ async def search_project_literature(
 
     Returns cached results when a non-expired SearchSession exists for the same
     project + query; otherwise fetches new results, stores them in CachedPaper,
-    creates a fresh SearchSession and deducts a credit.
+    creates a fresh SearchSession and deducts 1 credit.
     """
     now = datetime.now(timezone.utc)
 
@@ -565,13 +621,17 @@ async def search_project_literature(
             )
         )
         cached_papers = papers_result.scalars().all()
+        saved_filters = cached_session.filters if isinstance(cached_session.filters, dict) else {}
+        expanded_queries = saved_filters.get("expanded_queries") or [query]
         return {
             "search_session_id": str(cached_session.id),
             "cached": True,
+            "total_results": len(cached_papers),
+            "expanded_queries": expanded_queries,
             "papers": [cached_paper_to_dict(p) for p in cached_papers],
         }
 
-    # 2. No cache hit: deduct a credit before performing search
+    # 2. No cache hit: deduct 1 credit before performing search
     deducted = await deduct_credits(
         db,
         current_user,
@@ -581,22 +641,39 @@ async def search_project_literature(
     if not deducted:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Insufficient credits to perform the search",
+            detail="Số dư credit không đủ để thực hiện tìm kiếm tài liệu mới.",
         )
 
-    # 3. Fetch results (mock or live APIs) and create a new search session
+    # 3. Query expansion with LiteratureAgent
+    expanded_queries = [query.strip()]
+    try:
+        try:
+            from backend.agents.literature_agent import literature_agent
+        except ImportError:
+            from agents.literature_agent import literature_agent
+
+        gen_res = await literature_agent.generate_queries(topic=query.strip(), num_queries=3)
+        generated = [q.strip() for q in (gen_res.queries or []) if q and q.strip()]
+        for gq in generated:
+            if gq.lower() not in [eq.lower() for eq in expanded_queries]:
+                expanded_queries.append(gq)
+    except Exception as exc:
+        logger.warning("Semantic query expansion fallback: %s", exc)
+
+    # 4. Fetch results (mock or live APIs) and create a new search session
     raw_papers = await _fetch_source_papers(query, filters)
+    session_filters = {"filters": filters, "expanded_queries": expanded_queries}
     new_session = SearchSession(
         project_id=project.id,
         query=query,
-        filters=filters,
+        filters=session_filters,
         total_results=len(raw_papers),
         expires_at=now + timedelta(hours=CACHE_TTL_HOURS),
     )
     db.add(new_session)
     await db.flush()
 
-    # 4. Persist papers, reusing any already-cached paper by doi
+    # 5. Persist papers, reusing any already-cached paper by doi
     by_doi = await _existing_by_doi(db, raw_papers)
     stored_papers: list[CachedPaper] = []
     for item in raw_papers:
@@ -622,12 +699,234 @@ async def search_project_literature(
             returned = paper
         stored_papers.append(returned)
 
+    # 6. Log AI use
+    try:
+        await ai_use_logger.log_ai_usage(
+            agent_name="LiteratureAgent",
+            tokens_used=120,
+            user_id=str(current_user.id),
+            project_id=str(project.id),
+            input_summary={"query": query, "filters": filters},
+            output_summary={"total_results": len(stored_papers)},
+            credits_charged=SEARCH_CREDIT_COST,
+            db=db,
+        )
+    except Exception as log_err:
+        logger.warning("Failed to log AI use for LiteratureAgent: %s", log_err)
+
     await db.commit()
 
     return {
         "search_session_id": str(new_session.id),
         "cached": False,
+        "total_results": len(stored_papers),
+        "expanded_queries": expanded_queries,
         "papers": [cached_paper_to_dict(p) for p in stored_papers],
+    }
+
+
+async def select_paper_for_project(
+    db: AsyncSession,
+    project: Project,
+    paper_data: Optional[dict[str, Any]] = None,
+    cached_paper_id: Optional[str] = None,
+    relevant_sections: Optional[list[str]] = None,
+    notes: Optional[str] = None,
+) -> dict[str, Any]:
+    """Persist a chosen paper into the project's permanent selected_papers table."""
+    target_cached_paper: Optional[CachedPaper] = None
+
+    if cached_paper_id:
+        target_cached_paper = await db.get(CachedPaper, cached_paper_id)
+
+    if target_cached_paper is None and paper_data:
+        # Check if paper with matching doi/url already exists
+        doi = paper_data.get("doi")
+        url = paper_data.get("url")
+        if doi:
+            res = await db.execute(select(CachedPaper).where(CachedPaper.doi == doi))
+            target_cached_paper = res.scalars().first()
+        elif url:
+            res = await db.execute(select(CachedPaper).where(CachedPaper.url == url))
+            target_cached_paper = res.scalars().first()
+
+        if target_cached_paper is None:
+            # Need an existing session or create a placeholder session
+            res_sess = await db.execute(
+                select(SearchSession)
+                .where(SearchSession.project_id == project.id)
+                .order_by(SearchSession.created_at.desc())
+            )
+            sess = res_sess.scalars().first()
+            if not sess:
+                sess = SearchSession(
+                    project_id=project.id,
+                    query=paper_data.get("title") or "Direct Selection",
+                    filters={},
+                    total_results=1,
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=365),
+                )
+                db.add(sess)
+                await db.flush()
+
+            target_cached_paper = CachedPaper(
+                session_id=sess.id,
+                title=paper_data.get("title") or "Untitled",
+                authors=paper_data.get("authors") or [],
+                abstract=paper_data.get("abstract"),
+                doi=doi,
+                url=url,
+                source=paper_data.get("source"),
+                year=paper_data.get("year") or paper_data.get("publication_year"),
+                citation_count=paper_data.get("citation_count") or paper_data.get("citationCount") or 0,
+                summary=paper_data.get("summary") or paper_data.get("summaryVi"),
+                relevance_score=paper_data.get("relevance_score") or paper_data.get("relevanceScore") or 0.0,
+            )
+            db.add(target_cached_paper)
+            await db.flush()
+
+    if target_cached_paper is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Không tìm thấy thông tin bài báo để lưu vào đề tài.",
+        )
+
+    # Check if already selected
+    existing_stmt = select(SelectedPaper).where(
+        SelectedPaper.project_id == project.id,
+        SelectedPaper.cached_paper_id == target_cached_paper.id,
+    )
+    existing_res = await db.execute(existing_stmt)
+    existing_selected = existing_res.scalars().first()
+
+    # Format citation according to project's citation style
+    paper_dict = cached_paper_to_dict(target_cached_paper)
+    meta = _paper_to_citation_metadata(paper_dict)
+    raw_style = (getattr(project, "citation_style", None) or "apa7").lower()
+    style_map = {
+        "apa7": CitationStyle.APA7,
+        "ieee": CitationStyle.IEEE,
+        "bgddt": CitationStyle.BGDDT,
+    }
+    target_style = style_map.get(raw_style, CitationStyle.APA7)
+    citation_res = CitationFormatterService.format_citation(meta, style=target_style)
+    formatted_citation = citation_res.full_citation
+
+    if existing_selected is not None:
+        if notes is not None:
+            existing_selected.notes = notes
+        if relevant_sections is not None:
+            existing_selected.relevant_sections = relevant_sections
+        existing_selected.citation_formatted = formatted_citation
+        await db.commit()
+        await db.refresh(existing_selected)
+        item = existing_selected
+    else:
+        new_selected = SelectedPaper(
+            project_id=project.id,
+            cached_paper_id=target_cached_paper.id,
+            relevant_sections=relevant_sections,
+            citation_formatted=formatted_citation,
+            used_in_draft=False,
+            notes=notes,
+        )
+        db.add(new_selected)
+        await db.commit()
+        await db.refresh(new_selected)
+        item = new_selected
+
+    return {
+        "id": str(item.id),
+        "project_id": str(item.project_id),
+        "cached_paper_id": str(item.cached_paper_id),
+        "relevant_sections": item.relevant_sections,
+        "citation_formatted": item.citation_formatted,
+        "used_in_draft": bool(item.used_in_draft),
+        "notes": item.notes,
+        "selected_at": item.selected_at.isoformat() if item.selected_at else None,
+        "paper": paper_dict,
+    }
+
+
+async def get_project_selected_papers(db: AsyncSession, project_id: str) -> dict[str, Any]:
+    """Retrieve all permanently selected papers for a given project."""
+    stmt = (
+        select(SelectedPaper)
+        .where(SelectedPaper.project_id == project_id)
+        .order_by(SelectedPaper.selected_at.desc())
+    )
+    result = await db.execute(stmt)
+    selected_list = result.scalars().all()
+
+    items = []
+    for sp in selected_list:
+        cached_paper = await db.get(CachedPaper, sp.cached_paper_id)
+        paper_dict = cached_paper_to_dict(cached_paper) if cached_paper else None
+        items.append({
+            "id": str(sp.id),
+            "project_id": str(sp.project_id),
+            "cached_paper_id": str(sp.cached_paper_id),
+            "relevant_sections": sp.relevant_sections,
+            "citation_formatted": sp.citation_formatted,
+            "used_in_draft": bool(sp.used_in_draft),
+            "notes": sp.notes,
+            "selected_at": sp.selected_at.isoformat() if sp.selected_at else None,
+            "paper": paper_dict,
+        })
+    return {
+        "total": len(items),
+        "selected_papers": items,
+    }
+
+
+async def remove_selected_paper(db: AsyncSession, project_id: str, selected_paper_id: str) -> bool:
+    """Remove a selected paper from the project."""
+    stmt = select(SelectedPaper).where(
+        SelectedPaper.id == selected_paper_id,
+        SelectedPaper.project_id == project_id,
+    )
+    result = await db.execute(stmt)
+    item = result.scalars().first()
+    if not item:
+        return False
+    await db.delete(item)
+    await db.commit()
+    return True
+
+
+async def get_recent_search_session(db: AsyncSession, project_id: str) -> dict[str, Any]:
+    """Retrieve the most recent active (unexpired < 48h) search session for the project."""
+    now = datetime.now(timezone.utc)
+    stmt = (
+        select(SearchSession)
+        .where(
+            SearchSession.project_id == project_id,
+            SearchSession.expires_at > now,
+        )
+        .order_by(SearchSession.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    recent = result.scalars().first()
+    if not recent:
+        return {
+            "has_recent": False,
+            "search_session_id": None,
+            "query": None,
+            "total_results": 0,
+            "expires_at": None,
+            "papers": [],
+        }
+
+    papers_stmt = select(CachedPaper).where(CachedPaper.session_id == recent.id)
+    papers_res = await db.execute(papers_stmt)
+    cached_papers = papers_res.scalars().all()
+    return {
+        "has_recent": True,
+        "search_session_id": str(recent.id),
+        "query": recent.query,
+        "total_results": len(cached_papers),
+        "expires_at": recent.expires_at.isoformat() if recent.expires_at else None,
+        "papers": [cached_paper_to_dict(p) for p in cached_papers],
     }
 
 
@@ -636,3 +935,4 @@ async def search_literature(*args, **kwargs) -> Any:
     if args and isinstance(args[0], AsyncSession) or "db" in kwargs:
         return await search_project_literature(*args, **kwargs)
     return await search_direct_literature(*args, **kwargs)
+

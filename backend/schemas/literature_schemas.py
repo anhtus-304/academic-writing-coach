@@ -98,5 +98,41 @@ class PaperResponse(BaseModel):
 class LiteratureSearchResponse(BaseModel):
     search_session_id: str
     cached: bool
+    total_results: Optional[int] = 0
+    expanded_queries: Optional[List[str]] = Field(default_factory=list)
     papers: List[PaperResponse] = Field(default_factory=list)
+
+
+class SelectPaperRequest(BaseModel):
+    cached_paper_id: Optional[str] = None
+    paper: Optional[dict] = None
+    relevant_sections: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
+class SelectedPaperItem(BaseModel):
+    id: str
+    project_id: str
+    cached_paper_id: str
+    relevant_sections: Optional[List[str]] = None
+    citation_formatted: Optional[str] = None
+    used_in_draft: Optional[bool] = False
+    notes: Optional[str] = None
+    selected_at: Optional[str] = None
+    paper: Optional[PaperResponse] = None
+
+
+class ProjectSelectedPapersResponse(BaseModel):
+    total: int
+    selected_papers: List[SelectedPaperItem] = Field(default_factory=list)
+
+
+class RecentSearchResponse(BaseModel):
+    has_recent: bool
+    search_session_id: Optional[str] = None
+    query: Optional[str] = None
+    total_results: Optional[int] = 0
+    expires_at: Optional[str] = None
+    papers: List[PaperResponse] = Field(default_factory=list)
+
 
