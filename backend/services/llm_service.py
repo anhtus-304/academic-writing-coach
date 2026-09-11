@@ -28,7 +28,7 @@ class LLMService:
         self.default_model = default_model or settings.DEFAULT_MODEL
         self.temperature = temperature
 
-    async def generate_structured_output(
+    async def generate_structured_output_with_usage(
         self,
         system_prompt: str,
         user_prompt: str,
@@ -36,8 +36,8 @@ class LLMService:
         model: Optional[str] = None,
         temperature: float = 0.3,
         timeout: Optional[float] = None,
-    ) -> T:
-        """Generates structured output validated against a Pydantic schema using OpenRouter."""
+    ) -> tuple[T, dict[str, Any]]:
+        """Generates structured output and returns (parsed_result, usage_dict)."""
         selected_model = model or self.default_model or settings.DEFAULT_MODEL
         api_key = self.api_key or settings.OPENROUTER_API_KEY
         base_url = (self.base_url or settings.OPENROUTER_BASE_URL).rstrip("/")
@@ -85,7 +85,30 @@ class LLMService:
             response.raise_for_status()
             res_data = response.json()
             raw_content = res_data["choices"][0]["message"]["content"]
-            return self._clean_and_parse_json(raw_content, schema)
+            usage = res_data.get("usage", {})
+            parsed = self._clean_and_parse_json(raw_content, schema)
+            return parsed, usage
+
+    async def generate_structured_output(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: Type[T],
+        model: Optional[str] = None,
+        temperature: float = 0.3,
+        timeout: Optional[float] = None,
+    ) -> T:
+        """Generates structured output validated against a Pydantic schema using OpenRouter."""
+        result, _ = await self.generate_structured_output_with_usage(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            schema=schema,
+            model=model,
+            temperature=temperature,
+            timeout=timeout,
+        )
+        return result
+
 
     def _clean_and_parse_json(self, raw_text: str, schema: Type[T]) -> T:
         """Helper to extract JSON block from model response and validate against schema."""

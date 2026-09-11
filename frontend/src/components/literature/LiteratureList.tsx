@@ -10,6 +10,8 @@ type LiteratureListProps = {
   loading?: boolean;
   error?: string | null;
   selectedPaperId?: string;
+  selectedPaperIds?: string[];
+  selectingPaperId?: string | null;
   onSelectPaper: (paper: LiteraturePaper) => void;
 };
 
@@ -18,6 +20,8 @@ export function LiteratureList({
   loading = false,
   error = null,
   selectedPaperId,
+  selectedPaperIds = [],
+  selectingPaperId,
   onSelectPaper,
 }: LiteratureListProps) {
   if (loading) {
@@ -44,14 +48,21 @@ export function LiteratureList({
 
   return (
     <div className="space-y-3 p-3">
-      {papers.map((paper) => (
-        <PaperCard
-          key={paper.id}
-          paper={paper}
-          selected={paper.id === selectedPaperId}
-          onSelect={onSelectPaper}
-        />
-      ))}
+      {papers.map((paper) => {
+        const isSelected =
+          paper.id === selectedPaperId ||
+          selectedPaperIds.includes(paper.id) ||
+          Boolean(paper.doi && selectedPaperIds.includes(paper.doi));
+        return (
+          <PaperCard
+            key={paper.id}
+            paper={paper}
+            selected={isSelected}
+            isSelecting={selectingPaperId === paper.id}
+            onSelect={onSelectPaper}
+          />
+        );
+      })}
     </div>
   );
 }

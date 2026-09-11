@@ -53,7 +53,6 @@ CREATE DATABASE academic_writing;
 2. Thiết lập chuỗi kết nối với tài khoản, mật khẩu và cổng (mặc định `5432`) của PostgreSQL trên máy bạn:
 > **Chuỗi kết nối tương ứng:**  
 > `DATABASE_URL=postgresql+asyncpg://<username>:<password>@localhost:5432/academic_writing`  
-> *(Ví dụ: `postgresql+asyncpg://postgres:123456@localhost:5432/academic_writing`)*
 
 ---
 
@@ -388,3 +387,8 @@ python -m agents.outline_agent
 2. Nhấn **"Đăng nhập bằng Google"** hoặc **"⚡ Đăng nhập nhanh (Chế độ Thử nghiệm)"**.
 3. Tại **Dashboard**, nhấn **"+ Tạo dự án mới"** $\rightarrow$ Nhập đề tài $\rightarrow$ Nhấn **"Bắt đầu dự án"**.
 4. Tại **Workspace**, nhấn **"✨ Sinh dàn ý AI"** để nhận dàn ý học thuật từ DeepSeek AI và chỉnh sửa trực tiếp trên cây Outline Editor.
+
+## Cập nhật Task 14 - Thúy Vi
+- Thiết kế UI Stepper Bar 3 bước (Dàn ý ➔ Tài liệu ➔ Viết & Trích dẫn).
+- Dựng Component `CreditBalance` trên Header và hộp thoại `PurchaseModal` (Mockup nạp tiền).
+- Xây dựng UI bảng `AIUseLog` hiển thị báo cáo lịch sử sử dụng AI.

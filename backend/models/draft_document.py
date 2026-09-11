@@ -2,7 +2,10 @@ from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
-from database import Base
+try:
+    from backend.database import Base
+except ImportError:
+    from database import Base
 import uuid
 
 class DraftDocument(Base):
@@ -18,3 +21,4 @@ class DraftDocument(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     project = relationship("Project", back_populates="draft_documents")
+

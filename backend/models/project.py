@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.dialects.postgresql import UUID
-from database import Base
+try:
+    from backend.database import Base
+except ImportError:
+    from database import Base
 import uuid
 
 class Project(Base):
@@ -21,8 +24,11 @@ class Project(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=func.now())
 
+    title = synonym("topic")
+
     owner = relationship("User", back_populates="projects")
     outlines = relationship("Outline", back_populates="project", cascade="all, delete-orphan")
     search_sessions = relationship("SearchSession", back_populates="project", cascade="all, delete-orphan")
     selected_papers = relationship("SelectedPaper", back_populates="project", cascade="all, delete-orphan")
     draft_documents = relationship("DraftDocument", back_populates="project", cascade="all, delete-orphan")
+

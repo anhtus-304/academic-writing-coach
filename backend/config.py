@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = None
     GOOGLE_REDIRECT_URI: str
 
+    # Literature Search API URLs & Settings
+    SEMANTIC_SCHOLAR_SEARCH_URL: str
+    SEMANTIC_SCHOLAR_API_KEY: Optional[str] = None
+    ARXIV_API_URL: str
+    OPENALEX_WORKS_URL: str
+    OPENALEX_MAILTO: Optional[str] = None
+
     # CORS settings
     BACKEND_CORS_ORIGINS: List[str]
 

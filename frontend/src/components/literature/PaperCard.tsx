@@ -4,15 +4,16 @@ import { Check, ExternalLink, FileText } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { LiteraturePaper } from "./types";
+import { formatAuthors, type LiteraturePaper } from "./types";
 
 type PaperCardProps = {
   paper: LiteraturePaper;
   selected?: boolean;
+  isSelecting?: boolean;
   onSelect: (paper: LiteraturePaper) => void;
 };
 
-export function PaperCard({ paper, selected = false, onSelect }: PaperCardProps) {
+export function PaperCard({ paper, selected = false, isSelecting = false, onSelect }: PaperCardProps) {
   return (
     <article className={cn("rounded-lg border bg-white p-3 shadow-sm transition", selected ? "border-purple-500 ring-2 ring-purple-100" : "border-gray-200")}>
       <div className="flex items-start gap-2">
@@ -21,7 +22,7 @@ export function PaperCard({ paper, selected = false, onSelect }: PaperCardProps)
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold leading-5 text-gray-900">{paper.title}</h3>
-          <p className="mt-1 text-[11px] leading-4 text-gray-500">{paper.authors.join(", ")}</p>
+          <p className="mt-1 text-[11px] leading-4 text-gray-500">{formatAuthors(paper.authors)}</p>
         </div>
       </div>
 
@@ -45,9 +46,19 @@ export function PaperCard({ paper, selected = false, onSelect }: PaperCardProps)
             {paper.doi || "Open source"}
           </a>
         ) : <span />}
-        <Button type="button" size="sm" variant={selected ? "secondary" : "outline"} onClick={() => onSelect(paper)}>
-          {selected ? <Check className="h-3.5 w-3.5" /> : null}
-          {selected ? "Đã chọn" : "Chọn tài liệu"}
+        <Button
+          type="button"
+          size="sm"
+          disabled={isSelecting}
+          variant={selected ? "secondary" : "outline"}
+          onClick={() => onSelect(paper)}
+        >
+          {isSelecting ? (
+            <div className="h-3.5 w-3.5 mr-1 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+          ) : selected ? (
+            <Check className="h-3.5 w-3.5 mr-1" />
+          ) : null}
+          {isSelecting ? "Đang lưu..." : selected ? "Đã chọn" : "Chọn tài liệu"}
         </Button>
       </div>
     </article>

@@ -2,7 +2,10 @@ from sqlalchemy import Column, String, Boolean, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
-from database import Base
+try:
+    from backend.database import Base
+except ImportError:
+    from database import Base
 import uuid
 
 class SelectedPaper(Base):

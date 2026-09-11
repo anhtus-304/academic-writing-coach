@@ -3,9 +3,15 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
-from database import get_db
-from security import verify_token
-from models.user import User
+try:
+    from backend.database import get_db
+    from backend.security import verify_token
+    from backend.models.user import User
+except ImportError:
+    from database import get_db
+    from security import verify_token
+    from models.user import User
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 

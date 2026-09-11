@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -44,3 +44,95 @@ class SearchResponseSchema(BaseModel):
     query: str = Field(..., description="Original search query")
     total_results: int = Field(..., description="Total aggregated papers returned")
     papers: List[PaperSchema] = Field(default_factory=list, description="List of standardized paper objects")
+
+
+class SearchQueryItem(BaseModel):
+    query: str = Field(..., description="Target search query string")
+    language: str = Field("en", description="Language of query: 'en' or 'vi'")
+    target_aspect: Optional[str] = Field(None, description="Aspect or section of research targeted by this query")
+
+
+class QueryGeneratorRequest(BaseModel):
+    topic: str = Field(..., description="Main research topic or title")
+    outline: Optional[str] = Field(None, description="Structured outline or section breakdown")
+    num_queries: int = Field(5, ge=3, le=5, description="Number of search queries to generate (3-5)")
+
+
+class QueryGeneratorResponse(BaseModel):
+    queries: List[str] = Field(..., description="List of 3-5 search query strings (English and Vietnamese)")
+    search_queries: List[SearchQueryItem] = Field(default_factory=list, description="Detailed list of generated queries")
+    explanation: Optional[str] = Field(None, description="Brief rationale for generated queries")
+
+
+class PaperSummaryRequest(BaseModel):
+    title: str = Field(..., description="Title of the paper")
+    abstract: str = Field(..., description="Abstract text of the paper")
+    topic: Optional[str] = Field(None, description="User's research topic for relevance scoring")
+
+
+class PaperSummaryResponse(BaseModel):
+    summary_vi: str = Field(..., description="Concise 2-3 sentence Vietnamese summary of abstract")
+    relevance_score: float = Field(..., ge=0.0, le=1.0, description="Relevance score from 0.0 to 1.0 relative to research topic")
+    key_findings: Optional[List[str]] = Field(default_factory=list, description="1-3 key takeaways or findings")
+
+
+class LiteratureSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="Search query string")
+    filters: Optional[dict] = Field(default=None, description="Optional search filters: source, min_year")
+
+
+class PaperResponse(BaseModel):
+    id: str
+    title: str
+    authors: Optional[Any] = None
+    year: Optional[int] = None
+    source: Optional[str] = None
+    doi: Optional[str] = None
+    url: Optional[str] = None
+    abstract: Optional[str] = None
+    summary: Optional[str] = None
+    citation_count: Optional[int] = 0
+    relevance_score: Optional[float] = None
+
+
+class LiteratureSearchResponse(BaseModel):
+    search_session_id: str
+    cached: bool
+    total_results: Optional[int] = 0
+    expanded_queries: Optional[List[str]] = Field(default_factory=list)
+    papers: List[PaperResponse] = Field(default_factory=list)
+
+
+class SelectPaperRequest(BaseModel):
+    cached_paper_id: Optional[str] = None
+    paper: Optional[dict] = None
+    relevant_sections: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
+class SelectedPaperItem(BaseModel):
+    id: str
+    project_id: str
+    cached_paper_id: str
+    relevant_sections: Optional[List[str]] = None
+    citation_formatted: Optional[str] = None
+    used_in_draft: Optional[bool] = False
+    notes: Optional[str] = None
+    selected_at: Optional[str] = None
+    paper: Optional[PaperResponse] = None
+
+
+class ProjectSelectedPapersResponse(BaseModel):
+    total: int
+    selected_papers: List[SelectedPaperItem] = Field(default_factory=list)
+
+
+class RecentSearchResponse(BaseModel):
+    has_recent: bool
+    search_session_id: Optional[str] = None
+    query: Optional[str] = None
+    total_results: Optional[int] = 0
+    expires_at: Optional[str] = None
+    papers: List[PaperResponse] = Field(default_factory=list)
+
+

@@ -3,8 +3,13 @@ from typing import Optional
 from jose import JWTError, jwt
 from config import settings
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
+from typing import Optional, Union
+
+def create_access_token(data: Union[dict, str], expires_delta: Optional[timedelta] = None) -> str:
+    if isinstance(data, str):
+        to_encode = {"sub": data}
+    else:
+        to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:

@@ -1,8 +1,11 @@
 from sqlalchemy import Column, String, Integer, DateTime, Float, Text, ForeignKey, JSON
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.dialects.postgresql import UUID
-from database import Base
+try:
+    from backend.database import Base
+except ImportError:
+    from database import Base
 import uuid
 
 class CachedPaper(Base):
@@ -22,6 +25,9 @@ class CachedPaper(Base):
     relevance_score = Column(Float, default=0.0)
     raw_metadata = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    search_session_id = synonym("session_id")
+    publication_year = synonym("year")
 
     session = relationship("SearchSession", back_populates="cached_papers")
     selected_papers = relationship("SelectedPaper", back_populates="cached_paper", cascade="all, delete-orphan")
