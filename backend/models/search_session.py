@@ -1,14 +1,15 @@
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 from database import Base
 import uuid
 
 class SearchSession(Base):
     __tablename__ = "search_sessions"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+    id = Column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(UUID(as_uuid=False), ForeignKey("projects.id"), nullable=False, index=True)
     query = Column(String, nullable=False)
     filters = Column(JSON, nullable=True)
     total_results = Column(Integer, default=0)

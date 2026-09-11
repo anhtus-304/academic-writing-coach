@@ -1,14 +1,15 @@
 from sqlalchemy import Column, String, Integer, DateTime, Float, Text, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 from database import Base
 import uuid
 
 class CachedPaper(Base):
     __tablename__ = "cached_papers"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String, ForeignKey("search_sessions.id"), nullable=False, index=True)
+    id = Column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(UUID(as_uuid=False), ForeignKey("search_sessions.id"), nullable=False, index=True)
     title = Column(String, nullable=False)
     authors = Column(JSON, nullable=True)
     year = Column(Integer, nullable=True)

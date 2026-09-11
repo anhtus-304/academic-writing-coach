@@ -49,6 +49,7 @@ async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
         user = User(
             id=str(uuid.uuid4()),
             email=email,
+            email_verified=True,
             display_name=name,
             google_id=google_id,
             avatar_url=picture,
@@ -94,6 +95,7 @@ async def dev_login(data: DevLoginRequest = DevLoginRequest(), db: AsyncSession 
         user = User(
             id=str(uuid.uuid4()),
             email=data.email,
+            email_verified=True,
             display_name=data.name,
             avatar_url="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
             credit_balance=120

@@ -2,14 +2,15 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 from database import Base
 import uuid
 
 class Project(Base):
     __tablename__ = "projects"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    id = Column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False, index=True)
     topic = Column(String, nullable=False)
     document_type = Column(Enum("tieu_luan", "khoa_luan", "luan_van", name="document_type_enum"), nullable=False, default="tieu_luan")
     field = Column(String, nullable=True)

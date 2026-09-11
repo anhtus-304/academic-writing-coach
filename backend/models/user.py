@@ -1,16 +1,18 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, DateTime
+from sqlalchemy import Boolean, Column, String, Integer, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 from database import Base
 import uuid
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     google_id = Column(String, unique=True, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)
+    email_verified = Column(Boolean, nullable=False, default=False, server_default="false")
     display_name = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
     credit_balance = Column(Integer, default=0)
