@@ -5,8 +5,8 @@ the helpers are pure functions.
 """
 import asyncio
 
-from services.literature_service import _apply_filters, cached_paper_to_dict
-from services.search_aggregator import _dedup_key, _relevance_score, search_all
+from backend.services.literature_service import _apply_filters, cached_paper_to_dict
+from backend.services.search_aggregator import _dedup_key, _relevance_score, search_all
 
 
 def test_relevance_score_tokens():
@@ -94,7 +94,7 @@ def test_aggregator_dedup_and_scoring(monkeypatch):
             "relevance_score": None,
         }]
 
-    import services.search_aggregator as agg
+    import backend.services.search_aggregator as agg
 
     monkeypatch.setattr(agg, "search_arxiv", fake_arxiv)
     monkeypatch.setattr(agg, "search_openalex", fake_openalex)
@@ -122,7 +122,7 @@ def test_aggregator_source_filter(monkeypatch):
             "summary": None, "relevance_score": None,
         }]
 
-    import services.search_aggregator as agg
+    import backend.services.search_aggregator as agg
 
     monkeypatch.setattr(agg, "search_openalex", lambda q, l: (_ for _ in ()).throw(AssertionError("should not call")))
     monkeypatch.setattr(agg, "search_semantic_scholar", lambda q, l: (_ for _ in ()).throw(AssertionError("should not call")))

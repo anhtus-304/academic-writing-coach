@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
+import Highlight from "@tiptap/extension-highlight";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -22,6 +23,9 @@ type TiptapEditorProps = {
   onAskAI?: (selectedText: string) => void;
   insertReferenceHtml?: string | null;
   onReferenceInserted?: () => void;
+  highlightedSentences?: string[];
+  citationSuggestion?: { originalText: string; suggestedText: string } | null;
+  onCitationSuggestionApplied?: () => void;
 };
 
 export function TiptapEditor({
@@ -33,7 +37,11 @@ export function TiptapEditor({
   onAskAI,
   insertReferenceHtml,
   onReferenceInserted,
+  highlightedSentences = [],
+  citationSuggestion,
+  onCitationSuggestionApplied,
 }: TiptapEditorProps) {
+  const highlightedKey = useRef("");
   const editor = useEditor({
     immediatelyRender: false,
     editable,
@@ -46,6 +54,7 @@ export function TiptapEditor({
       Placeholder.configure({
         placeholder,
       }),
+      Highlight.configure({ multicolor: true }),
     ],
     content: value || "<p></p>",
     editorProps: {
@@ -80,6 +89,45 @@ export function TiptapEditor({
     editor.chain().focus().insertContent(insertReferenceHtml).run();
     onReferenceInserted?.();
   }, [editor, insertReferenceHtml, onReferenceInserted]);
+
+  useEffect(() => {
+    if (!editor || highlightedSentences.length === 0) {
+      return;
+    }
+
+    const sentences = highlightedSentences.filter(Boolean);
+    const key = sentences.join("\u0000");
+    if (key === highlightedKey.current) {
+      return;
+    }
+    highlightedKey.current = key;
+    editor.state.doc.descendants((node, position) => {
+      if (!node.isText || !node.text) return;
+      const sentence = sentences.find((item) => node.text?.includes(item));
+      if (!sentence) return;
+      const start = node.text.indexOf(sentence);
+      editor.chain().setTextSelection({ from: position + start, to: position + start + sentence.length }).setHighlight({ color: "#fef08a" }).run();
+    });
+  }, [editor, highlightedSentences]);
+
+  useEffect(() => {
+    if (!editor || !citationSuggestion?.originalText || !citationSuggestion.suggestedText) {
+      return;
+    }
+
+    let applied = false;
+    editor.state.doc.descendants((node, position) => {
+      if (applied || !node.isText || !node.text) return;
+      const start = node.text.indexOf(citationSuggestion.originalText);
+      if (start < 0) return;
+      editor.commands.insertContentAt(
+        { from: position + start, to: position + start + citationSuggestion.originalText.length },
+        citationSuggestion.suggestedText,
+      );
+      applied = true;
+    });
+    onCitationSuggestionApplied?.();
+  }, [editor, citationSuggestion, onCitationSuggestionApplied]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">

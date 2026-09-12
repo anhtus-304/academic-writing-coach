@@ -14,13 +14,13 @@ os.environ.setdefault("LITERATURE_MODE", "mock")
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-import models  # noqa: E402
-from database import Base, AsyncSessionLocal, engine  # noqa: E402
-from main import app  # noqa: E402
-from models.credit import CreditTransaction  # noqa: E402
-from models.project import Project  # noqa: E402
-from models.user import User  # noqa: E402
-from security import create_access_token  # noqa: E402
+import backend.models  # noqa: E402
+from backend.database import Base, AsyncSessionLocal, engine  # noqa: E402
+from backend.main import app  # noqa: E402
+from backend.models.credit import CreditTransaction  # noqa: E402
+from backend.models.project import Project  # noqa: E402
+from backend.models.user import User  # noqa: E402
+from backend.security import create_access_token  # noqa: E402
 
 
 @pytest.fixture(scope="module", autouse=True)

@@ -5,13 +5,15 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./_test_selected.db")
 os.environ.setdefault("LITERATURE_MODE", "mock")
 
-from database import Base, AsyncSessionLocal, engine
-from main import app
-from models.project import Project
-from models.user import User
-from models.cached_paper import CachedPaper
-from models.search_session import SearchSession
-from security import create_access_token
+from backend.database import Base, AsyncSessionLocal, engine
+from backend.main import app
+
+
+from backend.models.user import User
+from backend.models.project import Project
+from backend.models.cached_paper import CachedPaper
+from backend.models.search_session import SearchSession
+from backend.security import create_access_token
 
 
 @pytest.fixture(scope="module", autouse=True)

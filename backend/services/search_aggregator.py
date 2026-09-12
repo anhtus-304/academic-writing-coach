@@ -7,15 +7,6 @@ from datetime import datetime, timezone
 from typing import Any, List, Optional, Set
 
 try:
-    from schemas.literature_schemas import (
-        PaperSchema,
-        PaperSource,
-        SearchResponseSchema,
-    )
-    from services.scholar_service import ScholarService, scholar_service
-    from services.arxiv_service import ArxivService, arxiv_service
-    from services.openalex_service import OpenAlexService, openalex_service
-except ImportError:
     from backend.schemas.literature_schemas import (
         PaperSchema,
         PaperSource,
@@ -24,6 +15,15 @@ except ImportError:
     from backend.services.scholar_service import ScholarService, scholar_service
     from backend.services.arxiv_service import ArxivService, arxiv_service
     from backend.services.openalex_service import OpenAlexService, openalex_service
+except ImportError:
+    from schemas.literature_schemas import (
+        PaperSchema,
+        PaperSource,
+        SearchResponseSchema,
+    )
+    from services.scholar_service import ScholarService, scholar_service
+    from services.arxiv_service import ArxivService, arxiv_service
+    from services.openalex_service import OpenAlexService, openalex_service
 
 logger = logging.getLogger(__name__)
 

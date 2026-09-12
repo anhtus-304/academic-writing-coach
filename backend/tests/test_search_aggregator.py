@@ -2,16 +2,16 @@ import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, patch
 
-from schemas.literature_schemas import (
+from backend.schemas.literature_schemas import (
     AuthorSchema,
     PaperSchema,
     PaperSource,
     SearchResponseSchema,
 )
-from services.scholar_service import ScholarService
-from services.arxiv_service import ArxivService
-from services.openalex_service import OpenAlexService
-from services.search_aggregator import SearchAggregator
+from backend.services.scholar_service import ScholarService
+from backend.services.arxiv_service import ArxivService
+from backend.services.openalex_service import OpenAlexService
+from backend.services.search_aggregator import SearchAggregator
 
 
 # ---------------------------------------------------------------------------

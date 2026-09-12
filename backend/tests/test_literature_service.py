@@ -1,4 +1,4 @@
-from services.literature_service import normalize_paper_record
+from backend.services.literature_service import normalize_paper_record
 
 
 def test_normalize_paper_record_handles_semantic_scholar_shape():

@@ -1,10 +1,10 @@
-"""Shared pytest configuration.
-
-Import-time env setup so that every test module (regardless of import order)
-gets a throwaway SQLite database and deterministic mock literature mode.
-This avoids accidentally connecting to the real PostgreSQL from `.env`.
-"""
 import os
+import sys
+from pathlib import Path
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+	sys.path.insert(0, str(BACKEND_ROOT))
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./_test_e2e.db")
 os.environ.setdefault("LITERATURE_MODE", "mock")

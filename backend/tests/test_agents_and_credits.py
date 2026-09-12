@@ -3,10 +3,10 @@ from unittest.mock import AsyncMock, MagicMock
 from httpx import AsyncClient, ASGITransport
 import sys
 
-from main import app
-from models.user import User
-from models.project import Project
-from schemas.outline_schemas import AcademicOutline, OutlineSection, OutlineSubSection
+from backend.main import app
+from backend.models.user import User
+from backend.models.project import Project
+from backend.schemas.outline_schemas import AcademicOutline, OutlineSection, OutlineSubSection
 
 @pytest.fixture
 def mock_outline_obj():
@@ -78,7 +78,7 @@ class MockAgentsDBSession:
 async def test_agents_ask_success_and_credit_deduct(monkeypatch):
     test_user = User(id="usr-123", email="tester@edu.vn", credit_balance=50)
 
-    from database import get_db
+    from backend.database import get_db
     async def override_db():
         yield MockAgentsDBSession(test_user)
 
@@ -112,7 +112,7 @@ async def test_agents_ask_success_and_credit_deduct(monkeypatch):
 async def test_agents_ask_insufficient_credits(monkeypatch):
     poor_user = User(id="poor-123", email="poor@edu.vn", credit_balance=0)
 
-    from database import get_db
+    from backend.database import get_db
     async def override_db():
         yield MockAgentsDBSession(poor_user)
 
@@ -146,10 +146,10 @@ async def test_outline_generation_deducts_credits(mock_outline_obj, monkeypatch)
         from backend.agents.outline_agent import OutlineAgent
         monkeypatch.setattr(OutlineAgent, "generate_outline", AsyncMock(return_value=mock_outline_obj))
     except ImportError:
-        from agents.outline_agent import OutlineAgent
+        from backend.agents.outline_agent import OutlineAgent
         monkeypatch.setattr(OutlineAgent, "generate_outline", AsyncMock(return_value=mock_outline_obj))
 
-    from database import get_db
+    from backend.database import get_db
     async def override_db():
         yield MockAgentsDBSession(user_with_credits)
 

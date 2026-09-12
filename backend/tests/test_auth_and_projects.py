@@ -8,10 +8,7 @@ try:
     from backend.schemas.outline_schemas import AcademicOutline, OutlineSection, OutlineSubSection
     from backend.agents.outline_agent import outline_agent
 except ImportError:
-    from main import app
-    from database import get_db
-    from schemas.outline_schemas import AcademicOutline, OutlineSection, OutlineSubSection
-    from agents.outline_agent import outline_agent
+    raise
 
 
 @pytest.fixture
@@ -116,7 +113,7 @@ async def test_auth_and_project_lifecycle(mock_outline, monkeypatch):
         from backend.agents.outline_agent import OutlineAgent
         monkeypatch.setattr(OutlineAgent, "generate_outline", AsyncMock(return_value=mock_outline))
     except ImportError:
-        from agents.outline_agent import OutlineAgent
+        from backend.agents.outline_agent import OutlineAgent
         monkeypatch.setattr(OutlineAgent, "generate_outline", AsyncMock(return_value=mock_outline))
 
 
@@ -133,7 +130,7 @@ async def test_auth_and_project_lifecycle(mock_outline, monkeypatch):
         app.dependency_overrides[backend_get_db] = override_get_db
     except ImportError:
         pass
-    from database import get_db as bare_get_db
+    from backend.database import get_db as bare_get_db
     app.dependency_overrides[bare_get_db] = override_get_db
 
 

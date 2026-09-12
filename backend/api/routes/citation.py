@@ -11,6 +11,7 @@ try:
     from backend.models.selected_paper import SelectedPaper
     from backend.models.cached_paper import CachedPaper
     from backend.models.user import User
+    from backend.agents.citation_agent import citation_agent
     from backend.schemas.citation_schemas import (
         CitationMetadataSchema,
         CitationStyle,
@@ -27,6 +28,7 @@ except ImportError:
     from models.selected_paper import SelectedPaper
     from models.cached_paper import CachedPaper
     from models.user import User
+    from agents.citation_agent import citation_agent
     from schemas.citation_schemas import (
         CitationMetadataSchema,
         CitationStyle,
@@ -80,6 +82,8 @@ class CitationCheckResponse(BaseModel):
     invalid_citations: List[str]
     verified_count: int
     credits_charged: int
+    suggestions: List[Dict[str, Any]] = Field(default_factory=list)
+    bibliography: List[str] = Field(default_factory=list)
 
 
 def _clean_html_to_text(html: str) -> str:
@@ -129,80 +133,30 @@ async def check_citations_route(
     sel_res = await db.execute(sel_stmt)
     selected_papers = sel_res.scalars().all()
 
-    # Collect known author surnames / IDs for cross checking
-    known_authors = []
+    selected_metadata: List[Dict[str, Any]] = []
     for sp in selected_papers:
         cp = await db.get(CachedPaper, sp.cached_paper_id)
         if cp and cp.authors:
-            if isinstance(cp.authors, list):
-                for a in cp.authors:
-                    parts = str(a).strip().split()
-                    if parts:
-                        known_authors.append(parts[-1].lower())
-            elif isinstance(cp.authors, str):
-                for a in cp.authors.split(","):
-                    parts = a.strip().split()
-                    if parts:
-                        known_authors.append(parts[-1].lower())
+            selected_metadata.append({
+                "title": cp.title,
+                "authors": cp.authors,
+                "year": cp.year,
+                "doi": cp.doi,
+                "url": cp.url,
+                "abstract": cp.abstract,
+                "publicationType": cp.source,
+            })
 
-    # 3. Analyze content
+    # 3. Analyze content through the shared agent implementation
     plain_text = _clean_html_to_text(body.content)
-    sentences = _split_into_sentences(plain_text)
-
-    missing_claims: List[MissingCitationClaim] = []
-    has_citation_regex = re.compile("|".join(CITATION_PATTERNS))
-
-    for sentence in sentences:
-        has_citation = bool(has_citation_regex.search(sentence))
-        if not has_citation:
-            # Check if sentence contains statistical claims or definitive academic assertions
-            is_claim = False
-            trigger_reason = ""
-            for ind in CLAIM_INDICATORS:
-                if re.search(ind, sentence, re.IGNORECASE):
-                    is_claim = True
-                    trigger_reason = "Chứa dữ liệu số liệu định lượng hoặc nhận định khẳng định cần dẫn nguồn"
-                    break
-
-            if is_claim:
-                missing_claims.append(
-                    MissingCitationClaim(
-                        sentence=sentence,
-                        reason=trigger_reason,
-                        suggested_action="Bổ sung trích dẫn tài liệu tham khảo cho số liệu hoặc luận điểm này.",
-                    )
-                )
-
-    # Cross reference in-text citations with selected papers
-    invalid_citations: List[str] = []
-    verified_count = 0
-    in_text_matches = has_citation_regex.findall(plain_text)
-
-    for cite in in_text_matches:
-        matched = False
-        # If numeric [1], verify within bounds
-        num_m = re.match(r"\[(\d+)\]", cite)
-        if num_m:
-            idx = int(num_m.group(1))
-            if 1 <= idx <= len(selected_papers):
-                matched = True
-            else:
-                invalid_citations.append(f"Trích dẫn số {cite} không nằm trong danh mục {len(selected_papers)} tài liệu đã chọn")
-        else:
-            # Author, Year match
-            author_m = re.match(r"\(([A-ZÀ-Ỹa-zà-ỹ\s]+),?\s*(\d{4})?\)", cite)
-            if author_m:
-                found_author = author_m.group(1).strip().lower()
-                if any(k in found_author for k in known_authors):
-                    matched = True
-                else:
-                    invalid_citations.append(f"Tác giả '{author_m.group(1)}' trong '{cite}' chưa có trong danh mục tài liệu của đề tài")
-            else:
-                matched = True
-
-        if matched:
-            verified_count += 1
-
+    agent_result = await citation_agent.run({
+        "content": plain_text,
+        "citation_style": body.citation_style,
+        "selected_papers": selected_metadata,
+    })
+    missing_claims = [MissingCitationClaim(**claim) for claim in agent_result["missing_claims"]]
+    invalid_citations = agent_result["invalid_citations"]
+    verified_count = agent_result["verified_count"]
     total_issues = len(missing_claims) + len(invalid_citations)
 
     # 4. Log AI usage
@@ -228,6 +182,8 @@ async def check_citations_route(
         invalid_citations=invalid_citations,
         verified_count=verified_count,
         credits_charged=CITATION_CHECK_COST,
+        suggestions=agent_result["suggestions"],
+        bibliography=agent_result["bibliography"],
     )
 
 

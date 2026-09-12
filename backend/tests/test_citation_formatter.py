@@ -18,13 +18,13 @@ except ImportError:
 
 
 
-from schemas.citation_schemas import (
+from backend.schemas.citation_schemas import (
     CitationMetadataSchema,
     CitationStyle,
     DocumentType,
 )
-from services.citation_formatter import CitationFormatterService
-from data.citation_styles.bgddt import sort_bgddt_bibliography
+from backend.services.citation_formatter import CitationFormatterService
+from backend.data.citation_styles.bgddt import sort_bgddt_bibliography
 
 
 @pytest.fixture
