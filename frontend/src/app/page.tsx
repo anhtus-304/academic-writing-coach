@@ -1,11 +1,38 @@
+'use client';
 import Link from 'next/link';
+import { useState } from 'react';
 import StepperBar from '@/components/StepperBar';
+import CreditBalance from '@/components/CreditBalance';
 import AIUseLog from '@/components/AIUseLog';
 import { TiptapEditor } from '@/components/editor/TiptapEditor';
 
+// Các Component mới của Task 19
+import LoadingAgent from '@/components/common/LoadingAgent';
+import TourGuide from '@/components/common/TourGuide';
+import { Toaster, toast } from 'react-hot-toast';
+
 export default function LandingPage() {
+  // Biến trạng thái để bật/tắt hiệu ứng Loading
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Hàm mô phỏng việc gọi AI để test hiệu ứng
+  const handleTestAI = () => {
+    setIsLoading(true);
+    toast.loading('Đang kết nối hệ thống AI...', { id: 'ai-toast' });
+    
+    // Giả lập AI suy nghĩ 3 giây rồi báo thành công
+    setTimeout(() => {
+      setIsLoading(false);
+      toast.success('Thành công! AI đã xử lý xong.', { id: 'ai-toast' });
+    }, 3000);
+  };
+
   return (
     <div className="bg-white text-gray-800 antialiased overflow-x-hidden min-h-screen flex flex-col">
+      {/* Kích hoạt Tour hướng dẫn và Thông báo Toast */}
+      {/* <TourGuide/> */}
+      <Toaster position="bottom-right" reverseOrder={false} />
+
       {/* Navbar */}
       <nav className="fixed w-full z-50 top-0 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
@@ -24,6 +51,10 @@ export default function LandingPage() {
           </div>
           
           <div className="flex items-center space-x-4">
+            {/* Điểm neo số 3 cho Tour hướng dẫn */}
+            <div className="tour-step-3">
+              <CreditBalance />
+            </div>
             <Link href="/auth/signin" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Đăng nhập</Link>
             <Link href="/auth/signup" className="bg-purple-600 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-purple-700 transition shadow-md hover:shadow-lg">Bắt đầu miễn phí</Link>
           </div>
@@ -42,28 +73,40 @@ export default function LandingPage() {
         <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-tight mb-6 max-w-4xl">
           Nghiên cứu khoa học dễ dàng hơn với <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500">AI Academic Coach</span>
         </h1>
-        <p className="text-lg md:text-xl text-gray-500 mb-10 max-w-2xl">
+        <p className="text-lg md:text-xl text-gray-500 mb-6 max-w-2xl">
           Không làm thay bạn, nhưng sẽ hướng dẫn bạn. Từ việc lập dàn ý, tra cứu tài liệu học thuật cho đến chuẩn hóa trích dẫn, hệ thống Multi-Agent sẽ giúp bạn hoàn thành luận văn với điểm số cao nhất.
         </p>
+        
+        {/* Nút Test Hiệu ứng Loading và Toast */}
+        <button 
+          onClick={handleTestAI}
+          className="bg-gray-900 text-white px-8 py-3.5 rounded-full text-base font-semibold hover:bg-gray-800 transition shadow-lg flex items-center justify-center"
+        >
+          Trải nghiệm thử Loading & Toast AI
+        </button>
       </section>
 
-      {/* KHU VỰC DEMO GIAO DIỆN (NỐI CODE FE1 & FE2) */}
+      {/* KHU VỰC DEMO GIAO DIỆN */}
       <section className="py-12 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-6 p-8 border-2 border-dashed border-purple-200 rounded-2xl bg-purple-50/30">
           <div className="text-center mb-4">
-            <h2 className="text-2xl font-bold text-purple-800">Khu vực Demo Giao Diện (Task 14 & 15)</h2>
-            <p className="text-gray-500 text-sm">Kết hợp Thanh tiến trình và Trình soạn thảo văn bản Tiptap</p>
+            <h2 className="text-2xl font-bold text-purple-800">Khu vực Demo Giao Diện (Task 14, 15 & 19)</h2>
+            <p className="text-gray-500 text-sm">Kết hợp Stepper, Tiptap Editor và UX Improvements</p>
           </div>
           
-          {/* Thanh Stepper Bar (Của Vi) */}
-          <StepperBar />
+          {/* Điểm neo số 1 cho Tour hướng dẫn */}
+          <div className="tour-step-1">
+            <StepperBar />
+          </div>
 
-          {/* Trình soạn thảo văn bản (Của Bảo Châu) - Được bọc khung trắng bo góc */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden my-4 min-h-[300px]">
+          {/* Hiệu ứng Loading sẽ hiện ra ở đây khi bấm nút Test */}
+          {isLoading && <LoadingAgent text="AI đang phân tích tài liệu..." />}
+
+          {/* Điểm neo số 2 cho Tour hướng dẫn */}
+          <div className="tour-step-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden my-4 min-h-[300px]">
              <TiptapEditor />
           </div>
 
-          {/* Bảng Lịch sử AI Use Log (Của Vi) */}
           <AIUseLog />
         </div>
       </section>
