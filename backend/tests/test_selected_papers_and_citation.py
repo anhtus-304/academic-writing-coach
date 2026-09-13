@@ -1,4 +1,5 @@
 import os
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 
@@ -32,7 +33,7 @@ def auth_setup(client):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         async with AsyncSessionLocal() as db:
-            user = User(email="author@example.com", display_name="Author", credit_balance=10)
+            user = User(email=f"author_{uuid.uuid4().hex[:8]}@example.com", display_name="Author", credit_balance=10)
             db.add(user)
             await db.flush()
             project = Project(user_id=user.id, title="Thesis on NLP", topic="AI NLP", citation_style="apa7", status="draft")
@@ -102,8 +103,8 @@ def test_citation_check_deducts_credit(client, auth_setup):
     r_bal = client.get("/api/v1/credits/balance", headers=headers)
     init_balance = r_bal.json()["balance"]
 
-    # Content with an uncited claim: "chiếm 85% tổng số sinh viên"
-    draft_content = "<p>Nghiên cứu của chúng tôi cho thấy việc áp dụng AI chiếm 85% tổng số sinh viên tham gia khảo sát.</p>"
+    # Content with an uncited external claim: "chiếm 85% tổng số sinh viên"
+    draft_content = "<p>Theo các thống kê gần đây, việc áp dụng AI chiếm 85% tổng số sinh viên tham gia khảo sát trực tuyến.</p>"
     r_check = client.post(
         f"/api/v1/projects/{project_id}/citation/check",
         headers=headers,

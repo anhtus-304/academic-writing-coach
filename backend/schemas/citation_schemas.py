@@ -51,3 +51,45 @@ class BibliographyRequest(BaseModel):
 class BibliographyResponse(BaseModel):
     citations: List[str] = Field(..., description="Formatted & sorted list of bibliography entries")
     style: CitationStyle = Field(..., description="Citation style used")
+
+
+class CitationCheckRequest(BaseModel):
+    content: str = Field(..., min_length=10, description="Draft text or HTML content to analyze")
+    citation_style: Optional[str] = Field("apa7", description="Citation style: apa7, ieee, bgddt")
+
+
+class MissingCitationClaim(BaseModel):
+    sentence: str
+    reason: str
+    suggested_action: str
+    recommended_paper_id: Optional[str] = None
+    recommended_paper_title: Optional[str] = None
+    in_text_suggestion: Optional[str] = None
+
+
+class UncitedPaperItem(BaseModel):
+    id: Optional[str] = None
+    title: str
+    authors: List[str] = Field(default_factory=list)
+    year: Optional[int] = None
+    in_text_code: Optional[str] = None  # e.g. "(Vaswani et al., 2017)" or "[1]"
+    suggested_action: str = "Tài liệu này đã được chọn nhưng chưa được trích dẫn trong bài viết."
+
+
+class CitationCheckResponse(BaseModel):
+    total_issues: int
+    missing_claims: List[MissingCitationClaim] = Field(default_factory=list)
+    invalid_citations: List[str] = Field(default_factory=list)
+    citation_warnings: List[str] = Field(default_factory=list)
+    uncited_papers: List[UncitedPaperItem] = Field(default_factory=list)
+    verified_count: int = 0
+    credits_charged: int = 2
+
+
+class ProjectBibliographyResponse(BaseModel):
+    project_id: str
+    style: CitationStyle
+    total_references: int
+    bibliography: List[str] = Field(default_factory=list)
+    html_formatted: str = ""
+

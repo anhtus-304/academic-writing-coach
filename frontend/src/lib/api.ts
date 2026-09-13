@@ -250,12 +250,26 @@ export interface MissingCitationClaim {
   sentence: string;
   reason: string;
   suggested_action: string;
+  recommended_paper_id?: string | null;
+  recommended_paper_title?: string | null;
+  in_text_suggestion?: string | null;
+}
+
+export interface UncitedPaperItem {
+  id?: string;
+  title: string;
+  authors: string[];
+  year?: number;
+  in_text_code?: string;
+  suggested_action: string;
 }
 
 export interface CitationCheckResponse {
   total_issues: number;
   missing_claims: MissingCitationClaim[];
   invalid_citations: string[];
+  citation_warnings: string[];
+  uncited_papers: UncitedPaperItem[];
   verified_count: number;
   credits_charged: number;
 }
@@ -270,6 +284,16 @@ export const citationApi = {
     apiFetch<{ in_text_citation: string; full_citation: string; style: string }>("/api/v1/citation/format", {
       method: "POST",
       body: JSON.stringify({ metadata, style, index }),
+    }),
+  getProjectBibliography: (projectId: string, style?: string) =>
+    apiFetch<{
+      project_id: string;
+      style: string;
+      total_references: number;
+      bibliography: string[];
+      html_formatted: string;
+    }>(`/api/v1/projects/${projectId}/citation/bibliography${style ? `?style=${encodeURIComponent(style)}` : ""}`, {
+      method: "POST",
     }),
 };
 

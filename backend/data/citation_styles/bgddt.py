@@ -1,6 +1,6 @@
 import re
 from typing import List
-from schemas.citation_schemas import CitationMetadataSchema
+from schemas.citation_schemas import CitationMetadataSchema, DocumentType
 
 
 def is_vietnamese_text(text: str) -> bool:
@@ -85,31 +85,59 @@ def format_bgddt_full(meta: CitationMetadataSchema, index: int = 1) -> str:
     is_vn = is_vietnamese_text(meta.authors[0] if meta.authors else meta.title) or is_vietnamese_text(meta.title)
     authors_str = format_bgddt_authors_full(meta.authors, is_vn)
     year_str = f"({meta.year})"
-    title_str = f'"{meta.title.rstrip(".")}"'
+    doc_type = getattr(meta, "doc_type", DocumentType.JOURNAL)
 
-    parts = [f"[{index}] {authors_str} {year_str}, {title_str}"]
+    if doc_type == DocumentType.BOOK:
+        title_str = meta.title.rstrip(".")
+        parts = [f"[{index}] {authors_str} {year_str}, {title_str}"]
+        venue_parts = []
+        if meta.publisher:
+            venue_parts.append(meta.publisher)
+        elif meta.journal:
+            venue_parts.append(meta.journal)
+        if venue_parts:
+            parts.append(", ".join(venue_parts) + ".")
+    elif doc_type == DocumentType.THESIS:
+        title_str = meta.title.rstrip(".")
+        thesis_label = meta.journal or ("Luận văn thạc sĩ" if is_vn else "Master's thesis")
+        school = meta.publisher or "Trường Đại học"
+        parts = [f"[{index}] {authors_str} {year_str}, {title_str}, {thesis_label}, {school}."]
+    elif doc_type == DocumentType.WEB:
+        title_str = f'"{meta.title.rstrip(".")}"'
+        parts = [f"[{index}] {authors_str} {year_str}, {title_str}"]
+        site_parts = []
+        if meta.publisher or meta.journal:
+            site_parts.append(meta.publisher or meta.journal)
+        if meta.url:
+            site_parts.append(f"<{meta.url}>")
+        if site_parts:
+            parts.append(", ".join(site_parts) + ".")
+    else:
+        # Default / JOURNAL / CONFERENCE
+        title_str = f'"{meta.title.rstrip(".")}"'
+        parts = [f"[{index}] {authors_str} {year_str}, {title_str}"]
 
-    venue_parts = []
-    if meta.journal:
-        venue_parts.append(meta.journal)
-    elif meta.publisher:
-        venue_parts.append(meta.publisher)
+        venue_parts = []
+        if meta.journal:
+            venue_parts.append(meta.journal)
+        elif meta.publisher:
+            venue_parts.append(meta.publisher)
 
-    vol_issue_parts = []
-    if meta.volume:
-        vol_issue_parts.append(f"Tập {meta.volume}" if is_vn else f"Vol. {meta.volume}")
-    if meta.issue:
-        vol_issue_parts.append(f"Số {meta.issue}" if is_vn else f"No. {meta.issue}")
+        vol_issue_parts = []
+        if meta.volume:
+            vol_issue_parts.append(f"Tập {meta.volume}" if is_vn else f"Vol. {meta.volume}")
+        if meta.issue:
+            vol_issue_parts.append(f"Số {meta.issue}" if is_vn else f"No. {meta.issue}")
 
-    if vol_issue_parts:
-        venue_parts.append(" ".join(vol_issue_parts))
+        if vol_issue_parts:
+            venue_parts.append(" ".join(vol_issue_parts))
 
-    if meta.pages:
-        page_prefix = "tr. " if is_vn else "pp. "
-        venue_parts.append(f"{page_prefix}{meta.pages}")
+        if meta.pages:
+            page_prefix = "tr. " if is_vn else "pp. "
+            venue_parts.append(f"{page_prefix}{meta.pages}")
 
-    if venue_parts:
-        parts.append(", ".join(venue_parts) + ".")
+        if venue_parts:
+            parts.append(", ".join(venue_parts) + ".")
 
     if meta.doi:
         parts.append(f"DOI: {meta.doi}.")

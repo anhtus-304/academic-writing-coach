@@ -310,7 +310,41 @@ function WorkspaceContent() {
     }
   };
 
-  // Chèn trích dẫn vào Tiptap Editor
+  // Chèn trích dẫn nội văn vào vị trí con trỏ (In-text citation - thuần văn bản, không thẻ giao diện)
+  const handleInsertInTextCitation = (paper: LiteraturePaper, index: number) => {
+    let inText = "";
+    if (project?.citation_style === "ieee" || project?.citation_style === "bgddt") {
+      inText = `[${index}]`;
+    } else {
+      // APA 7th edition: (Author, Year)
+      const authors = paper.authors || [];
+      if (authors.length === 0) {
+        inText = `(Tài liệu học thuật, ${paper.year || "n.d."})`;
+      } else {
+        const getSurname = (name: string) => {
+          if (name.includes(",")) return name.split(",")[0].trim();
+          const parts = name.trim().split(/\s+/);
+          return parts[parts.length - 1];
+        };
+        if (authors.length === 1) {
+          inText = `(${getSurname(authors[0])}, ${paper.year || "n.d."})`;
+        } else if (authors.length === 2) {
+          inText = `(${getSurname(authors[0])} & ${getSurname(authors[1])}, ${paper.year || "n.d."})`;
+        } else {
+          inText = `(${getSurname(authors[0])} et al., ${paper.year || "n.d."})`;
+        }
+      }
+    }
+    // Chèn thuần text với một khoảng trắng phía trước, không bọc trong <span> hay thẻ HTML
+    setInsertReferenceHtml(` ${inText} `);
+  };
+
+  const handleInsertSnippetFromModal = (snippet: string) => {
+    // Chèn thuần text từ modal, không thẻ HTML
+    setInsertReferenceHtml(` ${snippet.trim()} `);
+  };
+
+  // Chèn 1 dòng danh mục tài liệu tham khảo đầy đủ (Bibliography entry)
   const handleInsertPaperReference = (paper: LiteraturePaper, customCitation?: string) => {
     let reference = "";
     if (customCitation) {
@@ -318,18 +352,40 @@ function WorkspaceContent() {
     } else {
       const authors = formatAuthors(paper.authors);
       const year = paper.year || "n.d.";
-      reference = `<p><strong>${escapeHtml(paper.title)}</strong> (${escapeHtml(authors)}, ${year}). ${paper.url ? `<a href="${paper.url}" target="_blank" rel="noreferrer">${paper.url}</a>` : ""}</p>`;
+      reference = `<p class="citation-entry"><strong>${escapeHtml(paper.title)}</strong> (${escapeHtml(authors)}, ${year}). ${paper.url ? `<a href="${paper.url}" target="_blank" rel="noreferrer">${paper.url}</a>` : ""}</p>`;
     }
     setInsertReferenceHtml(reference);
   };
 
-  // Chèn toàn bộ danh mục tài liệu tham khảo đã chọn vào cuối bài
-  const handleInsertFullBibliography = () => {
-    if (selectedPapers.length === 0) return;
+  // Chèn toàn bộ danh mục tài liệu tham khảo đã chọn vào cuối bài (Sắp xếp chuẩn theo chuẩn trích dẫn đề tài)
+  const handleInsertFullBibliography = async () => {
+    if (!project || selectedPapers.length === 0) return;
+
+    try {
+      // Gọi API backend để lấy danh mục đã được sắp xếp chính xác theo chuẩn của đề tài
+      // (APA7: sắp A-Z theo họ tác giả đầu; IEEE: đánh số thứ tự tăng dần; BGDDT: tiếng Việt trước theo tên, tiếng nước ngoài theo họ)
+      const res = await citationApi.getProjectBibliography(project.id, project.citation_style);
+      if (res && res.bibliography && res.bibliography.length > 0) {
+        const entries = res.bibliography
+          .map((entry) => `<p class="citation-entry">${escapeHtml(entry)}</p>`)
+          .join("");
+        const bibHtml = `<h2>TÀI LIỆU THAM KHẢO</h2>${entries}`;
+        setInsertReferenceHtml(bibHtml);
+        return;
+      }
+    } catch (err) {
+      console.warn("Lấy danh mục tài liệu tham khảo từ API gặp lỗi, dùng fallback nội bộ:", err);
+    }
+
+    // Fallback nội bộ nếu mất mạng hoặc API gặp sự cố
     const entries = selectedPapers
       .map((sp, idx) => {
-        const text = sp.citation_formatted || `${sp.paper?.title} (${sp.paper?.year || "n.d."})`;
-        return `<p>${project?.citation_style === "ieee" ? `[${idx + 1}] ` : ""}${escapeHtml(text)}</p>`;
+        let text = sp.citation_formatted || `${sp.paper?.title} (${sp.paper?.year || "n.d."})`;
+        // Tránh lặp số [1] [1] nếu đã có sẵn số thứ tự ở đầu chuỗi
+        if ((project?.citation_style === "ieee" || project?.citation_style === "bgddt") && !text.trim().startsWith("[")) {
+          text = `[${idx + 1}] ${text}`;
+        }
+        return `<p class="citation-entry">${escapeHtml(text)}</p>`;
       })
       .join("");
     const bibHtml = `<h2>TÀI LIỆU THAM KHẢO</h2>${entries}`;
@@ -836,7 +892,7 @@ function WorkspaceContent() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {selectedPapers.map((sp) => {
+                        {selectedPapers.map((sp, idx) => {
                           const p = sp.paper;
                           return (
                             <div key={sp.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-2xs space-y-2">
@@ -878,13 +934,24 @@ function WorkspaceContent() {
                                   </a>
                                 ) : <span />}
 
-                                <button
-                                  type="button"
-                                  onClick={() => p && handleInsertPaperReference(p, sp.citation_formatted)}
-                                  className="text-gray-700 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-[11px] font-medium transition"
-                                >
-                                  Chèn vào bài
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => p && handleInsertInTextCitation(p, idx + 1)}
+                                    className="text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2 py-1 rounded text-[11px] font-medium transition"
+                                    title="Chèn mã trích dẫn nội văn vào vị trí con trỏ (ví dụ [1] hoặc (Author, Year))"
+                                  >
+                                    + Trích dẫn trong bài
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => p && handleInsertPaperReference(p, sp.citation_formatted)}
+                                    className="text-gray-700 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-[11px] font-medium transition"
+                                    title="Chèn dòng thư mục đầy đủ vào bài viết"
+                                  >
+                                    Dòng thư mục
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -935,29 +1002,34 @@ function WorkspaceContent() {
             </div>
 
             <div className="p-4 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center">
-                  <div className="text-lg font-bold text-gray-800">{citationResult.total_issues}</div>
-                  <div className="text-[11px] text-gray-500">Tổng điểm cần lưu ý</div>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 text-center">
+                  <div className="text-base font-bold text-gray-800">{citationResult.total_issues}</div>
+                  <div className="text-[10px] text-gray-500">Tổng điểm lưu ý</div>
                 </div>
-                <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-center">
-                  <div className="text-lg font-bold text-amber-700">{citationResult.missing_claims.length}</div>
-                  <div className="text-[11px] text-amber-600">Câu thiếu dẫn nguồn</div>
+                <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-center">
+                  <div className="text-base font-bold text-amber-700">{citationResult.missing_claims.length}</div>
+                  <div className="text-[10px] text-amber-600">Câu thiếu nguồn</div>
                 </div>
-                <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-center">
-                  <div className="text-lg font-bold text-emerald-700">{citationResult.verified_count}</div>
-                  <div className="text-[11px] text-emerald-600">Trích dẫn đã khớp</div>
+                <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 text-center">
+                  <div className="text-base font-bold text-emerald-700">{citationResult.verified_count}</div>
+                  <div className="text-[10px] text-emerald-600">Trích dẫn đã khớp</div>
+                </div>
+                <div className="bg-blue-50 p-2.5 rounded-lg border border-blue-200 text-center">
+                  <div className="text-base font-bold text-blue-700">{citationResult.uncited_papers?.length || 0}</div>
+                  <div className="text-[10px] text-blue-600">Chưa dùng trong bài</div>
                 </div>
               </div>
 
+              {/* Nhóm 1: Câu thiếu dẫn nguồn */}
               {citationResult.missing_claims.length > 0 ? (
                 <div className="space-y-2">
                   <div className="font-semibold text-gray-900 text-xs flex items-center gap-1.5">
-                    <span className="text-amber-500">⚠️</span> Các câu khẳng định/số liệu thiếu dẫn chứng:
+                    <span className="text-amber-500">⚠️</span> Các câu khẳng định/số liệu thiếu dẫn chứng ({citationResult.missing_claims.length}):
                   </div>
                   <div className="space-y-2">
                     {citationResult.missing_claims.map((claim, idx) => (
-                      <div key={idx} className="bg-amber-50/50 border border-amber-200 rounded-lg p-3 space-y-1">
+                      <div key={idx} className="bg-amber-50/50 border border-amber-200 rounded-lg p-3 space-y-1.5">
                         <div className="text-gray-800 font-medium italic">
                           &quot;{claim.sentence}&quot;
                         </div>
@@ -967,6 +1039,25 @@ function WorkspaceContent() {
                         <div className="text-gray-600 text-[11px]">
                           <strong>Gợi ý:</strong> {claim.suggested_action}
                         </div>
+
+                        {/* Gợi ý bài báo phù hợp trong đề tài */}
+                        {claim.recommended_paper_title ? (
+                          <div className="bg-purple-50 border border-purple-200 rounded p-2 flex items-center justify-between gap-2 mt-1">
+                            <div className="text-[11px] text-purple-900 truncate">
+                              💡 <strong>Gợi ý từ đề tài:</strong> {claim.recommended_paper_title}
+                            </div>
+                            {claim.in_text_suggestion ? (
+                              <button
+                                type="button"
+                                onClick={() => handleInsertSnippetFromModal(claim.in_text_suggestion!)}
+                                className="shrink-0 bg-purple-600 hover:bg-purple-700 text-white px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer"
+                                title="Chèn mã trích dẫn này vào văn bản tại vị trí con trỏ"
+                              >
+                                Chèn {claim.in_text_suggestion}
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -977,15 +1068,61 @@ function WorkspaceContent() {
                 </div>
               )}
 
+              {/* Nhóm 2: Cảnh báo chuẩn định dạng trích dẫn */}
+              {citationResult.citation_warnings && citationResult.citation_warnings.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="font-semibold text-amber-700 text-xs flex items-center gap-1.5">
+                    <span>⚡</span> Cảnh báo chuẩn trích dẫn ({citationResult.citation_warnings.length}):
+                  </div>
+                  <div className="space-y-1.5">
+                    {citationResult.citation_warnings.map((warnText, idx) => (
+                      <div key={idx} className="bg-amber-50/80 border border-amber-200 rounded p-2 text-amber-900 text-[11px]">
+                        • {warnText}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Nhóm 3: Lỗi sai lệch danh mục trích dẫn */}
               {citationResult.invalid_citations && citationResult.invalid_citations.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="font-semibold text-red-700 text-xs">
-                    ❌ Sai lệch danh mục tài liệu tham khảo:
+                  <div className="font-semibold text-red-700 text-xs flex items-center gap-1.5">
+                    <span>❌</span> Sai lệch danh mục tài liệu tham khảo ({citationResult.invalid_citations.length}):
                   </div>
                   <div className="space-y-1.5">
                     {citationResult.invalid_citations.map((errText, idx) => (
                       <div key={idx} className="bg-red-50 border border-red-200 rounded p-2 text-red-700 text-[11px]">
                         • {errText}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Nhóm 4: Tài liệu đề tài chưa được trích dẫn */}
+              {citationResult.uncited_papers && citationResult.uncited_papers.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="font-semibold text-blue-700 text-xs flex items-center gap-1.5">
+                    <span>📚</span> Tài liệu đề tài chưa được trích dẫn ({citationResult.uncited_papers.length}):
+                  </div>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {citationResult.uncited_papers.map((paper, idx) => (
+                      <div key={idx} className="bg-blue-50/60 border border-blue-200 rounded p-2 flex items-center justify-between gap-2 text-[11px]">
+                        <div className="truncate pr-2">
+                          <span className="font-semibold text-gray-900">{paper.title}</span>
+                          <span className="text-gray-500 ml-1">({paper.year || "n.d."})</span>
+                        </div>
+                        {paper.in_text_code ? (
+                          <button
+                            type="button"
+                            onClick={() => handleInsertSnippetFromModal(paper.in_text_code!)}
+                            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer"
+                            title="Chèn mã trích dẫn này vào văn bản tại vị trí con trỏ"
+                          >
+                            Chèn {paper.in_text_code}
+                          </button>
+                        ) : null}
                       </div>
                     ))}
                   </div>
