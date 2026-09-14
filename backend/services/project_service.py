@@ -52,6 +52,20 @@ async def update_project(db: AsyncSession, project: Project, project_update: Pro
     for key, value in update_data.items():
         if hasattr(project, key):
             setattr(project, key, value)
+    
+    project.updated_at = datetime.now(timezone.utc)
+
+    # Đồng bộ Outline.title nếu tên đề tài được thay đổi
+    if "topic" in update_data and update_data["topic"]:
+        try:
+            from backend.models.outline import Outline
+        except ImportError:
+            from models.outline import Outline
+        outline_res = await db.execute(select(Outline).where(Outline.project_id == project.id))
+        outline = outline_res.scalar_one_or_none()
+        if outline:
+            outline.title = update_data["topic"]
+
     await db.commit()
     await db.refresh(project)
     return project
@@ -224,4 +238,71 @@ async def update_project_outline(
 
     await db.commit()
     await db.refresh(outline)
-    return outline
+    return outline
+
+
+async def get_project_document(db: AsyncSession, project_id: str, user_id: str):
+    try:
+        from backend.models.draft_document import DraftDocument
+    except ImportError:
+        from models.draft_document import DraftDocument
+
+    project = await get_project(db, project_id, user_id)
+    if not project:
+        return None
+
+    result = await db.execute(
+        select(DraftDocument)
+        .where(DraftDocument.project_id == project_id)
+        .order_by(DraftDocument.updated_at.desc(), DraftDocument.created_at.desc())
+    )
+    return result.scalars().first()
+
+
+async def save_project_document(
+    db: AsyncSession,
+    project_id: str,
+    user_id: str,
+    content: any,
+    chapter_ref: str | None = None,
+    word_count: int = 0
+):
+    try:
+        from backend.models.draft_document import DraftDocument
+    except ImportError:
+        from models.draft_document import DraftDocument
+
+    project = await get_project(db, project_id, user_id)
+    if not project:
+        return None
+
+    normalized_content = content if isinstance(content, dict) else {"html": str(content)}
+    result = await db.execute(
+        select(DraftDocument).where(DraftDocument.project_id == project_id)
+    )
+    doc = result.scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+
+    if not doc:
+        doc = DraftDocument(
+            id=str(uuid.uuid4()),
+            project_id=project_id,
+            content=normalized_content,
+            chapter_ref=chapter_ref,
+            word_count=word_count,
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(doc)
+    else:
+        doc.content = normalized_content
+        if chapter_ref is not None:
+            doc.chapter_ref = chapter_ref
+        doc.word_count = word_count
+        doc.version = (doc.version or 1) + 1
+        doc.updated_at = now
+
+    await db.commit()
+    await db.refresh(doc)
+    return doc

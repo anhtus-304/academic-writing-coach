@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authApi, projectApi, clearAuthToken, UserProfile, ProjectData } from "@/lib/api";
+import { Pencil, Trash2 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -90,6 +91,18 @@ export default function DashboardPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Xóa thất bại";
       alert("Xóa thất bại: " + msg);
+    }
+  };
+
+  const handleEditProjectTopic = async (proj: ProjectData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newTopic = window.prompt("Nhập tên mới cho đề tài:", proj.topic);
+    if (!newTopic || !newTopic.trim() || newTopic.trim() === proj.topic) return;
+    try {
+      const updated = await projectApi.update(proj.id, { topic: newTopic.trim() });
+      setProjects((prev) => prev.map((p) => (p.id === proj.id ? { ...p, topic: updated.topic } : p)));
+    } catch (err: unknown) {
+      alert("Đổi tên đề tài thất bại: " + (err instanceof Error ? err.message : ""));
     }
   };
 
@@ -191,15 +204,22 @@ export default function DashboardPage() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     {getDocTypeBadge(proj.document_type)}
-                    <button
-                      onClick={(e) => handleDeleteProject(proj.id, e)}
-                      title="Xóa dự án"
-                      className="text-gray-300 hover:text-red-500 p-1 transition opacity-0 group-hover:opacity-100"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        onClick={(e) => handleEditProjectTopic(proj, e)}
+                        title="Đổi tên đề tài"
+                        className="text-gray-400 hover:text-purple-600 p-1 transition"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteProject(proj.id, e)}
+                        title="Xóa dự án"
+                        className="text-gray-300 hover:text-red-500 p-1 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <h3 className="font-bold text-gray-900 text-base mb-2 leading-snug line-clamp-2">
                     {proj.topic}

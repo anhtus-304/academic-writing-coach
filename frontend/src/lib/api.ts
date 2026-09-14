@@ -21,8 +21,9 @@ export function clearAuthToken() {
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getAuthToken();
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...((options.headers as Record<string, string>) ?? {}),
   };
@@ -349,3 +350,109 @@ export const agentApi = {
       body: JSON.stringify(payload),
     }),
 };
+
+export async function apiDownload(path: string, body: unknown, defaultFilename: string) {
+  const token = getAuthToken();
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    let errorMessage = "Download failed";
+    try {
+      const errJson = JSON.parse(errorText);
+      errorMessage = errJson.detail || errJson.message || errorText;
+    } catch {
+      errorMessage = errorText;
+    }
+    throw new Error(errorMessage);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition");
+  let filename = defaultFilename;
+  if (disposition && disposition.includes("filename=")) {
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    if (match && match[1]) filename = match[1];
+  }
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+export interface DocumentDraftData {
+  id: string;
+  project_id: string;
+  content: unknown;
+  html: string;
+  chapter_ref?: string | null;
+  word_count: number;
+  version: number;
+  updated_at?: string | null;
+}
+
+export const documentApi = {
+  get: (projectId: string) =>
+    apiFetch<{ success: boolean; document: DocumentDraftData | null }>(
+      `/api/v1/projects/${projectId}/document`
+    ),
+  save: (projectId: string, content: string | Record<string, unknown>, wordCount = 0) =>
+    apiFetch<{ success: boolean; document: DocumentDraftData }>(
+      `/api/v1/projects/${projectId}/document`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ content, word_count: wordCount }),
+      }
+    ),
+};
+
+export const exportApi = {
+  exportDocx: (projectId: string, htmlContent: string, topic?: string) =>
+    apiDownload(
+      `/api/v1/projects/${projectId}/export/docx`,
+      { html_content: htmlContent, topic },
+      `${topic || "Bao_Cao_Hoc_Thuat"}.docx`
+    ),
+  exportMarkdown: (projectId: string, htmlContent: string, topic?: string) =>
+    apiDownload(
+      `/api/v1/projects/${projectId}/export/markdown`,
+      { html_content: htmlContent, topic },
+      `${topic || "Bao_Cao_Hoc_Thuat"}.md`
+    ),
+};
+
+export const importApi = {
+  importOutline: (projectId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiFetch<{ success: boolean; nodes: any[]; filename: string }>(
+      `/api/v1/projects/${projectId}/import/outline`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+  },
+  importDocument: (projectId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiFetch<{ success: boolean; html_content: string; filename: string }>(
+      `/api/v1/projects/${projectId}/import/document`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+  },
+};
+

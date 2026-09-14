@@ -1,0 +1,106 @@
+/* Tiptap Academic Editor Custom Styles */
+
+.tiptap-editor {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1f2937;
+}
+
+.tiptap-editor h1 {
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  color: #111827;
+}
+
+.tiptap-editor h2 {
+  font-size: 17px;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: #111827;
+}
+
+.tiptap-editor h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+}
+
+.tiptap-editor p {
+  margin-bottom: 0.75rem;
+  text-align: justify;
+}
+
+/* Thụt lề treo cho Danh mục tài liệu tham khảo (Hanging Indent) */
+.tiptap-editor .citation-entry {
+  padding-left: 2rem;
+  text-indent: -2rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+/* Định dạng in ấn học thuật chuyên dụng (A4 Print Engine) */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 20mm 20mm 20mm 30mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Times New Roman', Times, serif !important;
+  }
+
+  /* Ẩn toàn bộ thanh điều hướng, sidebars, toolbars khi in */
+  header,
+  aside,
+  .no-print,
+  [data-no-print="true"],
+  .tiptap-toolbar,
+  .bubble-menu,
+  button {
+    display: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .tiptap-editor {
+    padding: 0 !important;
+    font-size: 13pt !important;
+    line-height: 1.5 !important;
+  }
+
+  .tiptap-editor h1 {
+    font-size: 16pt !important;
+    page-break-after: avoid;
+  }
+
+  .tiptap-editor h2 {
+    font-size: 14pt !important;
+    page-break-after: avoid;
+  }
+
+  .tiptap-editor h3 {
+    font-size: 13pt !important;
+    page-break-after: avoid;
+  }
+
+  .tiptap-editor p {
+    orphans: 2;
+    widows: 2;
+  }
+}

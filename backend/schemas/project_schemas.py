@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from datetime import datetime
 from enum import Enum
 
@@ -42,3 +42,23 @@ class ProjectResponse(ProjectBase):
 
     class Config:
         from_attributes = True
+
+
+class DocumentDraftUpdate(BaseModel):
+    content: Any
+    chapter_ref: Optional[str] = None
+    word_count: Optional[int] = 0
+
+
+class DocumentDraftResponse(BaseModel):
+    id: str
+    project_id: str
+    content: Any
+    chapter_ref: Optional[str] = None
+    word_count: int = 0
+    version: int = 1
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

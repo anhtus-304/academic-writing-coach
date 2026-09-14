@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -9,6 +9,7 @@ import {
   authApi,
   literatureApi,
   citationApi,
+  documentApi,
   ProjectData,
   OutlineData,
   UserProfile,
@@ -20,9 +21,11 @@ import { AIResponsePanel } from "@/components/editor/AIResponsePanel";
 import { LiteratureList } from "@/components/literature/LiteratureList";
 import { SearchFilters } from "@/components/literature/SearchFilters";
 import { CreditBalance } from "@/components/CreditBalance";
+import { ExportDropdown } from "@/components/workspace/ExportDropdown";
+import { ImportModal } from "@/components/workspace/ImportModal";
 import { formatAuthors, type LiteraturePaper, type LiteratureFilters, type SelectedPaperItem } from "@/components/literature/types";
 
-import { Check, Trash2, BookOpen, Search, ShieldAlert, Sparkles, FileCheck, ExternalLink } from "lucide-react";
+import { Check, Trash2, BookOpen, Search, ShieldAlert, Sparkles, FileCheck, ExternalLink, Pencil, UploadCloud, X } from "lucide-react";
 
 interface RawSubSection {
   title?: string;
@@ -129,6 +132,14 @@ function WorkspaceContent() {
   const [selectedPapers, setSelectedPapers] = useState<SelectedPaperItem[]>([]);
   const [selectingPaperId, setSelectingPaperId] = useState<string | null>(null);
 
+  // Topic Edit state (Yêu cầu 3)
+  const [isEditingTopic, setIsEditingTopic] = useState(false);
+  const [editingTopicValue, setEditingTopicValue] = useState("");
+
+  // Import Modal state (Yêu cầu 5)
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const isFirstMount = useRef(true);
+
   // Citation Agent State (Tuần 3)
   const [checkingCitations, setCheckingCitations] = useState(false);
   const [citationResult, setCitationResult] = useState<CitationCheckResponse | null>(null);
@@ -160,20 +171,41 @@ function WorkspaceContent() {
         }
 
         if (targetProjectId) {
-          const [projData, outlineRes, selectedRes, recentRes] = await Promise.all([
+          const [projData, outlineRes, selectedRes, recentRes, draftRes] = await Promise.all([
             projectApi.get(targetProjectId).catch(() => null),
             outlineApi.get(targetProjectId).catch(() => ({ success: false, outline: null })),
             literatureApi.getSelectedPapers(targetProjectId).catch(() => ({ total: 0, selected_papers: [] })),
             literatureApi.getRecentSearch(targetProjectId).catch(() => null),
+            documentApi.get(targetProjectId).catch(() => ({ success: false, document: null })),
           ]);
 
           if (projData) setProject(projData);
+
+          let initialEditorHtml = "";
+          // 1. Ưu tiên cao nhất: Bản nháp đã lưu trên Database (Yêu cầu 2)
+          if (draftRes && draftRes.success && draftRes.document && draftRes.document.html) {
+            initialEditorHtml = draftRes.document.html;
+          } else if (typeof window !== "undefined") {
+            // 2. Dự phòng khẩn cấp: LocalStorage
+            const cachedLocal = localStorage.getItem("draft_doc_" + targetProjectId);
+            if (cachedLocal && cachedLocal.trim()) {
+              initialEditorHtml = cachedLocal;
+            }
+          }
 
           if (outlineRes.success && outlineRes.outline) {
             setOutline(outlineRes.outline);
             const nodes = transformBackendOutlineToNodes(outlineRes.outline.chapters);
             setOutlineNodes(nodes);
-            setEditorContent(outlineNodesToHtml(nodes));
+            // 3. Nếu chưa từng có bài viết thì mới khởi tạo từ Dàn ý
+            if (!initialEditorHtml) {
+              initialEditorHtml = outlineNodesToHtml(nodes);
+            }
+          }
+
+          if (initialEditorHtml) {
+            setEditorContent(initialEditorHtml);
+            setSaveStatus("Đã lưu");
           }
 
           // Khôi phục danh sách tài liệu đã chọn từ Database
@@ -201,6 +233,38 @@ function WorkspaceContent() {
 
     loadData();
   }, [projectId]);
+
+  // Cơ chế Tự động lưu ngầm (Debounce 2000ms Auto-save - Yêu cầu 2)
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    if (!project || !editorContent) return;
+
+    // Backup tức thì vào LocalStorage
+    try {
+      localStorage.setItem("draft_doc_" + project.id, editorContent);
+    } catch {
+      // ignore
+    }
+
+    setSaveStatus("Đang gõ...");
+
+    const timer = setTimeout(async () => {
+      try {
+        setSaveStatus("Đang lưu...");
+        await documentApi.save(project.id, editorContent);
+        const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        setSaveStatus(`Đã lưu lúc ${timeStr}`);
+      } catch (e) {
+        console.warn("Auto-save draft failed:", e);
+        setSaveStatus("Lỗi lưu tự động");
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [editorContent, project]);
 
   // Handle Project-scoped Literature Search with 48h cache & Credit deduction
   const handleSearchLiterature = async () => {
@@ -435,27 +499,77 @@ function WorkspaceContent() {
     }
   };
 
-  // Save modified outline
-  const handleSaveOutline = async () => {
+  // Lưu cả Dàn ý và Bài viết (Yêu cầu 2)
+  const handleSaveAll = async () => {
     if (!project) return;
     setSaving(true);
+    setSaveStatus("Đang lưu...");
     try {
-      const res = await outlineApi.update(project.id, outlineNodes, outline?.suggestions);
-      if (res.success && res.outline) {
-        setOutline(res.outline);
-        setSaveStatus("Đã lưu");
-      }
+      await Promise.all([
+        outlineNodes.length > 0 ? outlineApi.update(project.id, outlineNodes, outline?.suggestions) : Promise.resolve(),
+        documentApi.save(project.id, editorContent),
+      ]);
+      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setSaveStatus(`Đã lưu lúc ${timeStr}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Đã có lỗi xảy ra";
       alert("Lưu thất bại: " + msg);
+      setSaveStatus("Lưu thất bại");
     } finally {
       setSaving(false);
     }
   };
 
+  // Chỉnh sửa tên đề tài trực tiếp (Yêu cầu 3)
+  const handleStartEditTopic = () => {
+    setEditingTopicValue(project?.topic || "");
+    setIsEditingTopic(true);
+  };
+
+  const handleSaveTopic = async () => {
+    const trimmed = editingTopicValue.trim();
+    if (!project || !trimmed) {
+      setIsEditingTopic(false);
+      return;
+    }
+    try {
+      const updated = await projectApi.update(project.id, { topic: trimmed });
+      setProject((prev) => (prev ? { ...prev, topic: updated.topic } : prev));
+      setIsEditingTopic(false);
+    } catch (err: unknown) {
+      alert("Đổi tên đề tài thất bại: " + (err instanceof Error ? err.message : ""));
+    }
+  };
+
+  // Xử lý Import Dàn ý (Yêu cầu 5A)
+  const handleImportOutline = async (newNodes: OutlineNode[], mode: "replace" | "append") => {
+    if (!project) return;
+    let finalNodes: OutlineNode[] = [];
+    if (mode === "replace" || outlineNodes.length === 0) {
+      finalNodes = newNodes;
+    } else {
+      finalNodes = [...outlineNodes, ...newNodes];
+    }
+    setOutlineNodes(finalNodes);
+    try {
+      await outlineApi.update(project.id, finalNodes, outline?.suggestions);
+      setSaveStatus("Đã nhập dàn ý mới");
+    } catch (e) {
+      console.warn("Failed to auto-save imported outline:", e);
+    }
+  };
+
+  // Xử lý Import Bài viết (Yêu cầu 5B)
+  const handleImportDocument = (html: string, mode: "replace" | "insert") => {
+    if (mode === "replace") {
+      setEditorContent(html);
+    } else {
+      setInsertReferenceHtml(html);
+    }
+  };
+
   const handleOutlineChange = (nextNodes: OutlineNode[]) => {
     setOutlineNodes(nextNodes);
-    setEditorContent(outlineNodesToHtml(nextNodes));
     setSaveStatus("Chưa lưu...");
   };
 
@@ -474,25 +588,88 @@ function WorkspaceContent() {
     <div className="bg-white h-screen flex flex-col overflow-hidden text-gray-800 font-sans">
       {/* Top Navigation */}
       <header className="h-14 border-b border-gray-200 flex items-center justify-between px-4 shrink-0 bg-white z-20">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
           <Link
             href="/dashboard"
-            className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 transition text-gray-600"
+            className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 transition text-gray-600 shrink-0"
             title="Về Dashboard"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
             </svg>
           </Link>
-          <div className="font-semibold text-gray-900 text-sm max-w-md truncate">
-            {project?.topic || "Dự án nghiên cứu"}
-          </div>
-          <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+
+          {/* Chỉnh sửa Tên đề tài trực tiếp (Yêu cầu 3) */}
+          {isEditingTopic ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={editingTopicValue}
+                onChange={(e) => setEditingTopicValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveTopic();
+                  if (e.key === "Escape") setIsEditingTopic(false);
+                }}
+                autoFocus
+                className="text-xs border border-purple-300 rounded px-2.5 py-1 font-medium text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-500 max-w-sm w-72"
+              />
+              <button
+                type="button"
+                onClick={handleSaveTopic}
+                className="text-green-600 hover:text-green-700 p-1"
+                title="Lưu tên đề tài (Enter)"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditingTopic(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+                title="Hủy (Esc)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 group max-w-md">
+              <span className="font-semibold text-gray-900 text-sm truncate" title={project?.topic}>
+                {project?.topic || "Dự án nghiên cứu"}
+              </span>
+              <button
+                type="button"
+                onClick={handleStartEditTopic}
+                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-purple-600 transition p-1 shrink-0"
+                title="Chỉnh sửa tên đề tài"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          <div className="text-[11px] text-gray-500 bg-gray-100 px-2 py-1 rounded shrink-0">
             {saveStatus}
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
+          {/* Nút Nhập tệp (Import - Yêu cầu 5) */}
+          <button
+            type="button"
+            onClick={() => setIsImportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs px-3 py-1.5 rounded-md font-medium transition shadow-2xs active:scale-95"
+            title="Nhập dàn ý hoặc tài liệu từ Word (.docx) hoặc Markdown (.md)"
+          >
+            <UploadCloud className="w-3.5 h-3.5 text-purple-600" />
+            <span>Nhập tệp</span>
+          </button>
+
+          {/* Nút Xuất file (Export - Yêu cầu 4) */}
+          <ExportDropdown
+            projectId={project?.id || ""}
+            topic={project?.topic}
+            editorContent={editorContent}
+          />
+
           {/* Nút Kiểm tra trích dẫn toàn bài (2 Credits) */}
           <button
             onClick={handleCheckCitations}
@@ -513,13 +690,16 @@ function WorkspaceContent() {
             )}
           </button>
 
+          {/* Nút Lưu bài viết & dàn ý (Yêu cầu 2) */}
           <button
-            onClick={handleSaveOutline}
+            onClick={handleSaveAll}
             disabled={saving}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-md font-medium transition flex items-center"
+            title="Lưu đồng bộ cả dàn ý và bài viết vào cơ sở dữ liệu"
           >
-            {saving ? "Đang lưu..." : "💾 Lưu dàn ý"}
+            {saving ? "Đang lưu..." : "💾 Lưu bài viết"}
           </button>
+
           <CreditBalance initialBalance={user?.credits} refreshTrigger={creditTrigger} />
         </div>
       </header>
@@ -921,37 +1101,38 @@ function WorkspaceContent() {
                                 </div>
                               ) : null}
 
-                              <div className="flex items-center justify-between pt-1 text-[11px]">
-                                {p?.doi || p?.url ? (
+                              {p?.doi || p?.url ? (
+                                <div className="pt-0.5 text-[11px]">
                                   <a
                                     href={p.url || `https://doi.org/${p.doi}`}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="text-purple-600 hover:underline flex items-center gap-1 truncate max-w-[140px]"
+                                    className="text-purple-600 hover:underline inline-flex items-center gap-1 truncate max-w-full font-sans"
+                                    title={p.doi || p.url || "Link gốc"}
                                   >
-                                    <ExternalLink className="w-3 h-3 shrink-0" />
-                                    <span>{p.doi || "Link gốc"}</span>
+                                    <ExternalLink className="w-3 h-3 shrink-0 text-purple-500" />
+                                    <span className="truncate">{p.doi ? `DOI: ${p.doi}` : "Xem bài báo gốc"}</span>
                                   </a>
-                                ) : <span />}
-
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => p && handleInsertInTextCitation(p, idx + 1)}
-                                    className="text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2 py-1 rounded text-[11px] font-medium transition"
-                                    title="Chèn mã trích dẫn nội văn vào vị trí con trỏ (ví dụ [1] hoặc (Author, Year))"
-                                  >
-                                    + Trích dẫn trong bài
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => p && handleInsertPaperReference(p, sp.citation_formatted)}
-                                    className="text-gray-700 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-[11px] font-medium transition"
-                                    title="Chèn dòng thư mục đầy đủ vào bài viết"
-                                  >
-                                    Dòng thư mục
-                                  </button>
                                 </div>
+                              ) : null}
+
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-[11px]">
+                                <button
+                                  type="button"
+                                  onClick={() => p && handleInsertInTextCitation(p, idx + 1)}
+                                  className="h-8 px-2 rounded-md font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition flex items-center justify-center text-center truncate whitespace-nowrap shadow-2xs active:scale-98"
+                                  title="Chèn mã trích dẫn nội văn vào vị trí con trỏ (ví dụ [1] hoặc (Author, Year))"
+                                >
+                                  + Trích dẫn trong bài
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => p && handleInsertPaperReference(p, sp.citation_formatted)}
+                                  className="h-8 px-2 rounded-md font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 transition flex items-center justify-center text-center truncate whitespace-nowrap shadow-2xs active:scale-98"
+                                  title="Chèn dòng thư mục đầy đủ vào bài viết"
+                                >
+                                  Dòng thư mục
+                                </button>
                               </div>
                             </div>
                           );
@@ -1142,6 +1323,15 @@ function WorkspaceContent() {
           </div>
         </div>
       ) : null}
+
+      {/* Modal Nhập Tệp Tin Học Thuật (Yêu cầu 5) */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        projectId={project?.id || ""}
+        onImportOutline={handleImportOutline}
+        onImportDocument={handleImportDocument}
+      />
     </div>
   );
 }
