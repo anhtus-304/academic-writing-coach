@@ -376,9 +376,18 @@ export async function apiDownload(path: string, body: unknown, defaultFilename: 
   const blob = await res.blob();
   const disposition = res.headers.get("Content-Disposition");
   let filename = defaultFilename;
-  if (disposition && disposition.includes("filename=")) {
-    const match = disposition.match(/filename="?([^"]+)"?/);
-    if (match && match[1]) filename = match[1];
+  if (disposition) {
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match && utf8Match[1]) {
+      try {
+        filename = decodeURIComponent(utf8Match[1]);
+      } catch {
+        filename = defaultFilename;
+      }
+    } else {
+      const match = disposition.match(/filename="?([^";]+)"?/);
+      if (match && match[1]) filename = match[1];
+    }
   }
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");

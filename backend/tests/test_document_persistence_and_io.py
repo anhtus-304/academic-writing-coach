@@ -136,3 +136,24 @@ def test_convert_file_to_editor_html():
 def test_convert_file_unsupported_format():
     with pytest.raises(ValueError, match="không được hỗ trợ"):
         import_service.convert_file_to_editor_html(b"test", "test.pdf")
+
+
+def test_vietnamese_content_disposition_header_encoding():
+    import re
+    import urllib.parse
+    from starlette.responses import Response
+
+    topic = "Nghiên cứu Ứng dụng Blockchain trong Nông nghiệp thông minh"
+    clean_filename = "".join(c for c in topic if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_")
+    ascii_fallback = re.sub(r'[^a-zA-Z0-9_\-]', '', clean_filename) or "Academic_Paper"
+    encoded_filename = urllib.parse.quote(f"{clean_filename}.docx")
+
+    header_val = f'attachment; filename="{ascii_fallback}.docx"; filename*=UTF-8\'\'{encoded_filename}'
+    
+    # Test Starlette Response accepts this header without UnicodeEncodeError
+    res = Response(content=b"test", headers={"Content-Disposition": header_val})
+    assert res.headers["Content-Disposition"] == header_val
+    # Test encoding to latin-1 (exactly what Starlette does in init_headers)
+    raw_encoded = header_val.encode("latin-1")
+    assert raw_encoded is not None
+

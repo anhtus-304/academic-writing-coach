@@ -1,3 +1,5 @@
+import re
+import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, status, Response, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Any
@@ -261,11 +263,14 @@ async def export_docx(
     if not clean_filename:
         clean_filename = "Academic_Paper"
 
+    ascii_fallback = re.sub(r'[^a-zA-Z0-9_\-]', '', clean_filename) or "Academic_Paper"
+    encoded_filename = urllib.parse.quote(f"{clean_filename}.docx")
+
     return Response(
         content=buffer.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
-            "Content-Disposition": f'attachment; filename="{clean_filename}.docx"'
+            "Content-Disposition": f'attachment; filename="{ascii_fallback}.docx"; filename*=UTF-8\'\'{encoded_filename}'
         }
     )
 
@@ -293,11 +298,14 @@ async def export_markdown(
     if not clean_filename:
         clean_filename = "Academic_Paper"
 
+    ascii_fallback = re.sub(r'[^a-zA-Z0-9_\-]', '', clean_filename) or "Academic_Paper"
+    encoded_filename = urllib.parse.quote(f"{clean_filename}.md")
+
     return Response(
         content=md_content,
         media_type="text/markdown; charset=utf-8",
         headers={
-            "Content-Disposition": f'attachment; filename="{clean_filename}.md"'
+            "Content-Disposition": f'attachment; filename="{ascii_fallback}.md"; filename*=UTF-8\'\'{encoded_filename}'
         }
     )
 
