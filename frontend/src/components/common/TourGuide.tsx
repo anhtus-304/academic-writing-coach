@@ -3,8 +3,7 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import type { Step } from 'react-joyride';
 
-// @ts-expect-error react-joyride type dynamic import
-const Joyride = dynamic(() => import('react-joyride'), { ssr: false });
+const Joyride = dynamic<any>(() => import('react-joyride').then((mod: any) => (mod.Joyride || mod.default || mod)), { ssr: false });
 
 export default function TourGuide() {
   const [isMounted, setIsMounted] = useState(false);
@@ -29,7 +28,6 @@ export default function TourGuide() {
     {
       target: '.tour-step-1',
       content: 'Chào mừng bạn! Đây là thanh tiến trình 3 bước để hoàn thành luận văn.',
-      disableBeacon: true,
     },
     {
       target: '.tour-step-2',

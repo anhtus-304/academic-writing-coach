@@ -14,6 +14,7 @@ import {
   OutlineData,
   UserProfile,
   CitationCheckResponse,
+  CitationSuggestion,
 } from "@/lib/api";
 import { OutlineEditor, OutlineNode, generateTableOfContentsHtml } from "@/components/outline/OutlineEditor";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
@@ -25,6 +26,8 @@ import { ExportDropdown } from "@/components/workspace/ExportDropdown";
 import { ImportModal } from "@/components/workspace/ImportModal";
 import AIUseLog from "@/components/AIUseLog";
 import { formatAuthors, type LiteraturePaper, type LiteratureFilters, type SelectedPaperItem } from "@/components/literature/types";
+import { BibliographyView } from "@/components/citation/BibliographyView";
+import { AgentStepper } from "@/components/agents/AgentStepper";
 
 import { Check, Trash2, BookOpen, Search, ShieldAlert, Sparkles, FileCheck, ExternalLink, Pencil, UploadCloud, X } from "lucide-react";
 
@@ -148,6 +151,7 @@ function WorkspaceContent() {
   const [checkingCitations, setCheckingCitations] = useState(false);
   const [citationResult, setCitationResult] = useState<CitationCheckResponse | null>(null);
   const [isCitationModalOpen, setIsCitationModalOpen] = useState(false);
+  const [citationSuggestion, setCitationSuggestion] = useState<{ originalText: string; suggestedText: string } | null>(null);
 
   // Load project, outline, selected papers and recent search data
   useEffect(() => {
@@ -469,6 +473,16 @@ function WorkspaceContent() {
     setCheckingCitations(true);
     try {
       const res = await citationApi.checkCitations(project.id, editorContent, project.citation_style);
+      if (!res.bibliography || res.bibliography.length === 0) {
+        try {
+          const bibRes = await citationApi.getProjectBibliography(project.id, project.citation_style);
+          if (bibRes && bibRes.bibliography) {
+            res.bibliography = bibRes.bibliography;
+          }
+        } catch (bibErr) {
+          console.warn("Could not fetch project bibliography:", bibErr);
+        }
+      }
       setCitationResult(res);
       setIsCitationModalOpen(true);
       setCreditTrigger((c) => c + 1); // Trừ 2 Credits và cập nhật số dư tức thì!
@@ -477,6 +491,14 @@ function WorkspaceContent() {
     } finally {
       setCheckingCitations(false);
     }
+  };
+
+  const handleAcceptCitationSuggestion = (suggestion: CitationSuggestion) => {
+    if (!suggestion.suggested_text) return;
+    setCitationSuggestion({
+      originalText: suggestion.original_text,
+      suggestedText: suggestion.suggested_text,
+    });
   };
 
   // Generate AI Outline
@@ -867,6 +889,15 @@ function WorkspaceContent() {
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
           <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12">
             <div className="mx-auto w-full max-w-4xl">
+              <AgentStepper
+                steps={[
+                  { label: "Outline Agent", status: outline ? "success" : "pending" },
+                  { label: "Literature Agent", status: selectedPapers.length > 0 ? "success" : "pending" },
+                  { label: "Citation Agent", status: checkingCitations ? "running" : citationResult ? "success" : "pending" },
+                  { label: "Citation Formatter", status: citationResult?.bibliography?.length ? "success" : "pending" },
+                  { label: "Hoàn tất", status: citationResult ? "success" : "pending" },
+                ]}
+              />
               <h1 className="mb-8 text-center text-2xl font-bold uppercase leading-snug text-gray-900">
                 {project?.topic}
               </h1>
@@ -884,6 +915,9 @@ function WorkspaceContent() {
                   const tocHtml = generateTableOfContentsHtml(outlineNodes);
                   setInsertReferenceHtml(tocHtml);
                 }}
+                highlightedSentences={citationResult?.missing_claims.map((claim) => claim.sentence) || []}
+                citationSuggestion={citationSuggestion}
+                onCitationSuggestionApplied={() => setCitationSuggestion(null)}
                 onAskAI={(text) => {
                   setSelectedText(text);
                   setIsAIResponsePanelOpen(true);
@@ -1248,16 +1282,42 @@ function WorkspaceContent() {
                             <div className="text-[11px] text-purple-900 truncate">
                               💡 <strong>Gợi ý từ đề tài:</strong> {claim.recommended_paper_title}
                             </div>
-                            {claim.in_text_suggestion ? (
-                              <button
-                                type="button"
-                                onClick={() => handleInsertSnippetFromModal(claim.in_text_suggestion!)}
-                                className="shrink-0 bg-purple-600 hover:bg-purple-700 text-white px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer"
-                                title="Chèn mã trích dẫn này vào văn bản tại vị trí con trỏ"
-                              >
-                                Chèn {claim.in_text_suggestion}
-                              </button>
-                            ) : null}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {claim.in_text_suggestion ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInsertSnippetFromModal(claim.in_text_suggestion!)}
+                                    className="bg-white border border-purple-300 hover:bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer"
+                                    title="Chèn mã trích dẫn này vào văn bản tại vị trí con trỏ"
+                                  >
+                                    Chèn tại con trỏ
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const orig = claim.sentence;
+                                      const code = claim.in_text_suggestion!;
+                                      let replaced = orig;
+                                      if (orig.endsWith(".")) {
+                                        replaced = orig.slice(0, -1).trim() + " " + code + ".";
+                                      } else {
+                                        replaced = orig.trim() + " " + code;
+                                      }
+                                      handleAcceptCitationSuggestion({
+                                        original_text: orig,
+                                        suggested_text: replaced,
+                                        reason: claim.reason,
+                                      });
+                                    }}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white px-2.5 py-0.5 rounded text-[10px] font-medium transition cursor-pointer"
+                                    title="Tự động thay thế câu này trong Tiptap Editor với mã trích dẫn được gợi ý"
+                                  >
+                                    Chấp nhận gợi ý AI
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
                           </div>
                         ) : null}
                       </div>
@@ -1302,6 +1362,29 @@ function WorkspaceContent() {
                 </div>
               ) : null}
 
+              {/* Gợi ý thay thế từ AI (nếu có) */}
+              {citationResult.suggestions?.length ? (
+                <div className="space-y-2">
+                  <div className="font-semibold text-gray-900 text-xs">Gợi ý thay thế từ AI:</div>
+                  {citationResult.suggestions.map((suggestion, index) => (
+                    <div key={`${suggestion.original_text}-${index}`} className="rounded-lg border border-purple-200 bg-purple-50/60 p-3 text-[11px]">
+                      <p className="text-gray-700">{suggestion.reason}</p>
+                      {suggestion.suggested_text ? (
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptCitationSuggestion(suggestion)}
+                          className="mt-2 rounded-md bg-purple-600 px-2.5 py-1.5 font-semibold text-white hover:bg-purple-700"
+                        >
+                          Chấp nhận gợi ý AI
+                        </button>
+                      ) : (
+                        <p className="mt-2 text-amber-700">Chưa có tài liệu đã chọn để đề xuất nguồn.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
               {/* Nhóm 4: Tài liệu đề tài chưa được trích dẫn */}
               {citationResult.uncited_papers && citationResult.uncited_papers.length > 0 ? (
                 <div className="space-y-2">
@@ -1328,6 +1411,16 @@ function WorkspaceContent() {
                       </div>
                     ))}
                   </div>
+                </div>
+              ) : null}
+
+              {/* Danh mục tài liệu tham khảo theo chuẩn (FE 2 Component) */}
+              {citationResult.bibliography && citationResult.bibliography.length > 0 ? (
+                <div className="pt-2 border-t border-gray-200">
+                  <BibliographyView
+                    citations={citationResult.bibliography}
+                    style={(project?.citation_style as any) || "apa7"}
+                  />
                 </div>
               ) : null}
             </div>

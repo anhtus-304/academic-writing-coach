@@ -69,7 +69,7 @@ export function ImportModal({
       if (target === "outline") {
         const res = await importApi.importOutline(projectId, selectedFile);
         if (res.success && res.nodes) {
-          onImportOutline(res.nodes, mode === "replace" ? "replace" : "append");
+          onImportOutline(res.nodes as unknown as OutlineNode[], mode === "replace" ? "replace" : "append");
           onClose();
         } else {
           throw new Error("Không thể bóc tách dàn ý từ tệp tin.");

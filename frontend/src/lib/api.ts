@@ -62,6 +62,7 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string;
+  full_name?: string;
   avatar_url?: string;
   credits: number;
 }
@@ -265,6 +266,13 @@ export interface UncitedPaperItem {
   suggested_action: string;
 }
 
+export interface CitationSuggestion {
+  original_text: string;
+  suggested_text: string | null;
+  reason: string;
+  source?: Record<string, unknown> | null;
+}
+
 export interface CitationCheckResponse {
   total_issues: number;
   missing_claims: MissingCitationClaim[];
@@ -273,6 +281,8 @@ export interface CitationCheckResponse {
   uncited_papers: UncitedPaperItem[];
   verified_count: number;
   credits_charged: number;
+  suggestions?: CitationSuggestion[];
+  bibliography?: string[];
 }
 
 export const citationApi = {
