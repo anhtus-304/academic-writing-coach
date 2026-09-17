@@ -30,16 +30,19 @@ async def get_balance(
 
 @router.get("/logs")
 async def get_ai_use_logs(
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=100),
+    project_id: str | None = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     query = (
         select(AIUseLog)
         .where(AIUseLog.user_id == current_user.id)
-        .order_by(desc(AIUseLog.created_at))
-        .limit(limit)
     )
+    if project_id:
+        query = query.where(AIUseLog.project_id == project_id)
+
+    query = query.order_by(desc(AIUseLog.created_at)).limit(limit)
     result = await db.execute(query)
     logs = result.scalars().all()
 
@@ -51,6 +54,8 @@ async def get_ai_use_logs(
             "credits_charged": log.credits_charged or 0,
             "duration_ms": log.duration_ms,
             "project_id": log.project_id,
+            "input_summary": log.input_summary,
+            "output_summary": log.output_summary,
             "created_at": log.created_at.isoformat() if log.created_at else None,
         }
         for log in logs

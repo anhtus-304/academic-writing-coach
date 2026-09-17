@@ -1,27 +1,31 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import type { Step } from 'react-joyride';
 
-// @ts-ignore
-const Joyride = dynamic(() => import('react-joyride'), { ssr: false }) as any;
+// @ts-expect-error react-joyride type dynamic import
+const Joyride = dynamic(() => import('react-joyride'), { ssr: false });
 
 export default function TourGuide() {
   const [isMounted, setIsMounted] = useState(false);
   const [runTour, setRunTour] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
-    
-    // Bắt hệ thống chờ đúng 1 giây (1000ms) để tải xong HTML rồi mới bật Tour
+    const frame = requestAnimationFrame(() => {
+      setIsMounted(true);
+    });
+
     const timer = setTimeout(() => {
       setRunTour(true);
     }, 1000);
-    
-    // Dọn dẹp bộ đếm khi tắt
-    return () => clearTimeout(timer);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
   }, []);
 
-  const steps: any = [
+  const steps: Step[] = [
     {
       target: '.tour-step-1',
       content: 'Chào mừng bạn! Đây là thanh tiến trình 3 bước để hoàn thành luận văn.',
@@ -31,10 +35,6 @@ export default function TourGuide() {
       target: '.tour-step-2',
       content: 'Khung soạn thảo thông minh tích hợp AI đa tác nhân.',
     },
-    {
-      target: '.tour-step-3',
-      content: 'Bấm vào đây để nạp thêm Credit khi cần nhé!',
-    }
   ];
 
   if (!isMounted) return null;
@@ -47,15 +47,15 @@ export default function TourGuide() {
       showSkipButton={true}
       styles={{
         options: {
-          primaryColor: '#9333ea', 
-          zIndex: 10000, // Tăng mức độ ưu tiên hiển thị lên cao nhất để không bị Navbar đè lên
-        }
+          primaryColor: '#9333ea',
+          zIndex: 10000,
+        },
       }}
       locale={{
         last: 'Hoàn thành',
         next: 'Tiếp theo',
         skip: 'Bỏ qua',
-        back: 'Quay lại'
+        back: 'Quay lại',
       }}
     />
   );

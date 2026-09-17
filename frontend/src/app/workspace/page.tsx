@@ -15,7 +15,7 @@ import {
   UserProfile,
   CitationCheckResponse,
 } from "@/lib/api";
-import { OutlineEditor, OutlineNode } from "@/components/outline/OutlineEditor";
+import { OutlineEditor, OutlineNode, generateTableOfContentsHtml } from "@/components/outline/OutlineEditor";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { AIResponsePanel } from "@/components/editor/AIResponsePanel";
 import { LiteratureList } from "@/components/literature/LiteratureList";
@@ -23,6 +23,7 @@ import { SearchFilters } from "@/components/literature/SearchFilters";
 import { CreditBalance } from "@/components/CreditBalance";
 import { ExportDropdown } from "@/components/workspace/ExportDropdown";
 import { ImportModal } from "@/components/workspace/ImportModal";
+import AIUseLog from "@/components/AIUseLog";
 import { formatAuthors, type LiteraturePaper, type LiteratureFilters, type SelectedPaperItem } from "@/components/literature/types";
 
 import { Check, Trash2, BookOpen, Search, ShieldAlert, Sparkles, FileCheck, ExternalLink, Pencil, UploadCloud, X } from "lucide-react";
@@ -138,6 +139,9 @@ function WorkspaceContent() {
 
   // Import Modal state (Yêu cầu 5)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  // Cuộn đến tiêu đề tương ứng khi click vào Dàn ý
+  const [scrollToHeadingText, setScrollToHeadingText] = useState<string | null>(null);
   const isFirstMount = useRef(true);
 
   // Citation Agent State (Tuần 3)
@@ -248,8 +252,6 @@ function WorkspaceContent() {
     } catch {
       // ignore
     }
-
-    setSaveStatus("Đang gõ...");
 
     const timer = setTimeout(async () => {
       try {
@@ -776,7 +778,13 @@ function WorkspaceContent() {
                   <OutlineEditor
                     outline={outlineNodes}
                     onChange={handleOutlineChange}
-                    title="Chỉnh sửa dàn ý"
+                    title="Cấu trúc dàn ý"
+                    onNavigateToSection={(sectionTitle) => {
+                      setScrollToHeadingText(sectionTitle);
+                    }}
+                    onInsertTableOfContents={(tocHtml) => {
+                      setInsertReferenceHtml(tocHtml);
+                    }}
                   />
                 </div>
               )
@@ -864,16 +872,29 @@ function WorkspaceContent() {
               </h1>
               <TiptapEditor
                 value={editorContent}
-                onChange={setEditorContent}
+                onChange={(content) => {
+                  setEditorContent(content);
+                  setSaveStatus("Đang gõ...");
+                }}
                 placeholder="Bắt đầu viết nội dung nghiên cứu..."
                 insertReferenceHtml={insertReferenceHtml}
                 onReferenceInserted={() => setInsertReferenceHtml(null)}
+                scrollToHeadingText={scrollToHeadingText}
+                onInsertToc={() => {
+                  const tocHtml = generateTableOfContentsHtml(outlineNodes);
+                  setInsertReferenceHtml(tocHtml);
+                }}
                 onAskAI={(text) => {
                   setSelectedText(text);
                   setIsAIResponsePanelOpen(true);
                   setRightPanelTab("assistant");
                 }}
               />
+
+              {/* Báo Cáo Minh Bạch Lịch Sử Sử Dụng AI (Phía dưới Editor) */}
+              <div className="mt-8 border-t border-gray-200 pt-6">
+                <AIUseLog projectId={project?.id} refreshTrigger={creditTrigger} />
+              </div>
             </div>
           </div>
         </main>

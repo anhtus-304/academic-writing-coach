@@ -324,7 +324,11 @@ export interface CreditTransactionItem {
 
 export const creditApi = {
   getBalance: () => apiFetch<CreditBalanceResponse>("/api/v1/credits/balance"),
-  getLogs: (limit = 20) => apiFetch<AIUseLogItem[]>(`/api/v1/credits/logs?limit=${limit}`),
+  getLogs: (limit = 50, projectId?: string) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (projectId) query.append("project_id", projectId);
+    return apiFetch<AIUseLogItem[]>(`/api/v1/credits/logs?${query.toString()}`);
+  },
   getTransactions: (limit = 20) => apiFetch<CreditTransactionItem[]>(`/api/v1/credits/transactions?limit=${limit}`),
 };
 
@@ -444,7 +448,7 @@ export const importApi = {
   importOutline: (projectId: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    return apiFetch<{ success: boolean; nodes: any[]; filename: string }>(
+    return apiFetch<{ success: boolean; nodes: Array<Record<string, unknown>>; filename: string }>(
       `/api/v1/projects/${projectId}/import/outline`,
       {
         method: "POST",

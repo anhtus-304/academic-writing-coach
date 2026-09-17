@@ -10,55 +10,80 @@ const AGENT_NAME_MAP: Record<string, string> = {
   CitationAgent: 'Kiểm tra & Format Trích dẫn',
 };
 
-export function AIUseLog() {
+interface AIUseLogProps {
+  projectId?: string;
+  refreshTrigger?: number | string;
+}
+
+export function AIUseLog({ projectId, refreshTrigger }: AIUseLogProps) {
   const [logs, setLogs] = useState<AIUseLogItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const data = await creditApi.getLogs(50, projectId);
+      setLogs(data);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-    async function fetchLogs() {
+
+    async function loadData() {
       try {
-        const data = await creditApi.getLogs(20);
+        const data = await creditApi.getLogs(50, projectId);
         if (isMounted) {
           setLogs(data);
         }
       } catch {
-        // Fallback demo data if offline or not logged in
         if (isMounted) {
-          setLogs([
-            {
-              id: 'sample-1',
-              agent_name: 'OutlineAgent',
-              tokens_used: 1840,
-              credits_charged: 2,
-              created_at: new Date().toISOString(),
-            },
-            {
-              id: 'sample-2',
-              agent_name: 'LiteratureAgent',
-              tokens_used: 920,
-              credits_charged: 1,
-              created_at: new Date(Date.now() - 3600000).toISOString(),
-            },
-            {
-              id: 'sample-3',
-              agent_name: 'AIAssistant',
-              tokens_used: 350,
-              credits_charged: 1,
-              created_at: new Date(Date.now() - 7200000).toISOString(),
-            },
-          ]);
+          if (!projectId) {
+            setLogs([
+              {
+                id: 'sample-1',
+                agent_name: 'OutlineAgent',
+                tokens_used: 1840,
+                credits_charged: 2,
+                created_at: new Date().toISOString(),
+              },
+              {
+                id: 'sample-2',
+                agent_name: 'LiteratureAgent',
+                tokens_used: 920,
+                credits_charged: 1,
+                created_at: new Date(Date.now() - 3600000).toISOString(),
+              },
+              {
+                id: 'sample-3',
+                agent_name: 'AIAssistant',
+                tokens_used: 350,
+                credits_charged: 1,
+                created_at: new Date(Date.now() - 7200000).toISOString(),
+              },
+            ]);
+          } else {
+            setLogs([]);
+          }
         }
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    fetchLogs();
+    loadData();
+
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [projectId, refreshTrigger]);
+
+  const totalTokens = logs.reduce((acc, cur) => acc + (cur.tokens_used || 0), 0);
+  const totalCredits = logs.reduce((acc, cur) => acc + (cur.credits_charged || 0), 0);
 
   const formatTime = (dateStr?: string) => {
     if (!dateStr) return 'Vừa xong';
@@ -78,20 +103,55 @@ export function AIUseLog() {
 
   return (
     <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 mt-6 w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
           <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
             <span>📊</span> Báo Cáo Minh Bạch Lịch Sử Sử Dụng AI (AI Use Log)
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Ghi nhận chính xác số lượng tokens và credit được khấu trừ theo từng tác vụ học thuật
+            Ghi nhận chính xác số lượng tokens và credit được khấu trừ theo từng tác vụ học thuật của đề tài
           </p>
         </div>
-        <span className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-semibold self-start sm:self-auto border border-purple-100">
-          Chống gian lận & Minh bạch
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={loading}
+            className="text-xs text-gray-500 hover:text-purple-600 bg-gray-50 hover:bg-purple-50 border border-gray-200 px-2.5 py-1 rounded-lg transition flex items-center gap-1"
+            title="Tải lại dữ liệu"
+          >
+            <span className={loading ? 'animate-spin' : ''}>🔄</span> Làm mới
+          </button>
+          <span className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-semibold border border-purple-100">
+            Minh bạch học thuật
+          </span>
+        </div>
       </div>
 
+      {/* Summary Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
+          <div className="text-[11px] text-gray-500 font-medium">Tổng tác vụ AI đã gọi</div>
+          <div className="text-lg font-bold text-gray-900 mt-0.5">
+            {logs.length} <span className="text-xs font-normal text-gray-500">lần</span>
+          </div>
+        </div>
+        <div className="bg-purple-50/60 border border-purple-100 rounded-lg p-3">
+          <div className="text-[11px] text-purple-700 font-medium">Tổng Tokens xử lý</div>
+          <div className="text-lg font-bold text-purple-900 mt-0.5 font-mono">
+            {totalTokens.toLocaleString('vi-VN')} <span className="text-xs font-normal text-purple-600">tokens</span>
+          </div>
+        </div>
+        <div className="bg-amber-50/60 border border-amber-100 rounded-lg p-3">
+          <div className="text-[11px] text-amber-800 font-medium">Tổng Credits đã dùng</div>
+          <div className="text-lg font-bold text-amber-900 mt-0.5 font-mono">
+            -{totalCredits} <span className="text-xs font-normal text-amber-700">credits</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Logs Table */}
       <div className="overflow-x-auto rounded-lg border border-gray-100">
         <table className="w-full border-collapse text-left text-xs">
           <thead>
@@ -107,13 +167,13 @@ export function AIUseLog() {
             {loading ? (
               <tr>
                 <td colSpan={5} className="p-6 text-center text-gray-400">
-                  Đang tải nhật ký sử dụng...
+                  <span className="inline-block animate-spin mr-1">⏳</span> Đang tải nhật ký sử dụng...
                 </td>
               </tr>
             ) : logs.length === 0 ? (
               <tr>
                 <td colSpan={5} className="p-6 text-center text-gray-400">
-                  Chưa có lịch sử gọi AI. Hãy thử tạo dàn ý hoặc tìm kiếm tài liệu để xem báo cáo.
+                  Chưa có lịch sử gọi AI trong đề tài này. Khi bạn tạo dàn ý, tìm tài liệu hoặc hỏi AI, nhật ký sẽ được ghi nhận tại đây.
                 </td>
               </tr>
             ) : (
@@ -123,9 +183,12 @@ export function AIUseLog() {
                     {formatTime(log.created_at)}
                   </td>
                   <td className="p-3 font-medium text-gray-900">
-                    {AGENT_NAME_MAP[log.agent_name] || log.agent_name}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-purple-600">✨</span>
+                      <span>{AGENT_NAME_MAP[log.agent_name] || log.agent_name}</span>
+                    </div>
                   </td>
-                  <td className="p-3 text-right text-gray-500 font-mono text-[11px]">
+                  <td className="p-3 text-right text-gray-600 font-mono text-[11px]">
                     {log.tokens_used > 0 ? log.tokens_used.toLocaleString('vi-VN') : '—'}
                   </td>
                   <td className="p-3 text-right font-bold text-red-600 whitespace-nowrap">
