@@ -104,30 +104,40 @@ function addChildNode(nodes: OutlineNode[], parentId: string): OutlineNode[] {
 }
 
 /**
- * Sinh chuỗi HTML Mục Lục chuẩn học thuật với dải chấm leader dots
+ * Sinh chuỗi HTML Mục Lục chuẩn học thuật sử dụng bảng hai cột và đường kẻ chấm (dot leaders)
+ * tương thích hoàn hảo với schema ProseMirror/Tiptap
  */
 export function generateTableOfContentsHtml(nodes: OutlineNode[]): string {
   if (!nodes || nodes.length === 0) return "";
 
   let estimatedPage = 1;
-  let itemsHtml = "";
+  let rowsHtml = "";
 
   function traverse(list: OutlineNode[], prefix = "") {
     list.forEach((node, index) => {
       const currentNumber = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
       const isTopLevel = !prefix;
-      const indentPx = prefix ? (prefix.split(".").length * 16) : 0;
+      const indentPx = prefix ? prefix.split(".").length * 16 : 0;
       const pageNum = estimatedPage;
       estimatedPage += isTopLevel ? 3 : 1;
 
-      itemsHtml += `
-        <div class="toc-item" style="display: flex; align-items: baseline; margin-bottom: 6px; padding-left: ${indentPx}px; font-size: ${isTopLevel ? "13pt" : "12pt"}; font-weight: ${isTopLevel ? "bold" : "normal"};">
-          <span class="toc-title" style="white-space: nowrap; max-width: 75%; overflow: hidden; text-overflow: ellipsis;">
-            ${currentNumber}. ${node.title}
-          </span>
-          <span class="toc-dots" style="flex: 1; border-bottom: 1px dotted #666; margin: 0 8px; height: 1em; min-width: 20px;"></span>
-          <span class="toc-page" style="font-family: monospace; font-size: 11pt;">${pageNum}</span>
-        </div>
+      const titleStyle = `margin: 0; padding-left: ${indentPx}px; ${
+        isTopLevel ? "font-weight: bold; font-size: 13pt;" : "font-weight: normal; font-size: 12pt;"
+      }`;
+
+      rowsHtml += `
+        <tr>
+          <td style="border: none; border-bottom: 1px dotted #9ca3af; padding: 5px 8px; vertical-align: bottom;">
+            <p style="${titleStyle}">
+              ${isTopLevel ? `<strong>${currentNumber}. ${node.title}</strong>` : `${currentNumber}. ${node.title}`}
+            </p>
+          </td>
+          <td style="border: none; border-bottom: 1px dotted #9ca3af; padding: 5px 8px; text-align: right; width: 70px; vertical-align: bottom; font-family: monospace;">
+            <p style="margin: 0; text-align: right; font-weight: ${isTopLevel ? "bold" : "normal"};">
+              ${pageNum}
+            </p>
+          </td>
+        </tr>
       `;
 
       if (node.children && node.children.length > 0) {
@@ -139,14 +149,24 @@ export function generateTableOfContentsHtml(nodes: OutlineNode[]): string {
   traverse(nodes);
 
   return `
-    <div class="table-of-contents-block" style="margin: 24px 0; padding: 18px 24px; background-color: #fafafa; border: 1px solid #e5e7eb; border-radius: 8px; font-family: 'Times New Roman', serif;">
-      <h2 style="text-align: center; font-weight: bold; text-transform: uppercase; font-size: 15pt; margin-bottom: 16px; color: #111827; letter-spacing: 0.5px;">
-        MỤC LỤC
-      </h2>
-      <div class="toc-list" style="line-height: 1.6;">
-        ${itemsHtml}
-      </div>
-    </div>
+    <h2 style="text-align: center; margin-top: 24px; margin-bottom: 12px; font-weight: bold; letter-spacing: 0.5px;">
+      MỤC LỤC
+    </h2>
+    <table class="academic-toc-table" style="width: 100%; border-collapse: collapse; margin: 12px 0 24px 0;">
+      <thead>
+        <tr>
+          <th style="border: none; border-bottom: 2px solid #1f2937; padding: 6px 8px; text-align: left; font-size: 11pt; font-weight: bold;">
+            <p style="margin: 0;"><strong>NỘI DUNG</strong></p>
+          </th>
+          <th style="border: none; border-bottom: 2px solid #1f2937; padding: 6px 8px; text-align: right; width: 70px; font-size: 11pt; font-weight: bold;">
+            <p style="margin: 0; text-align: right;"><strong>TRANG</strong></p>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
     <p></p>
   `;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Highlight from "@tiptap/extension-highlight";
 import StarterKit from "@tiptap/starter-kit";
@@ -25,6 +25,65 @@ import "@/styles/editor.css";
 import { EditorToolbar } from "./EditorToolbar";
 import { AIBubbleMenu } from "./AIBubbleMenu";
 
+// Mở rộng Table để hỗ trợ class và inline style cho Mục Lục & Bảng học thuật
+const CustomTable = Table.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      class: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("class"),
+        renderHTML: (attributes) => {
+          if (!attributes.class) return {};
+          return { class: attributes.class };
+        },
+      },
+      style: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("style"),
+        renderHTML: (attributes) => {
+          if (!attributes.style) return {};
+          return { style: attributes.style };
+        },
+      },
+    };
+  },
+}).configure({
+  resizable: true,
+});
+
+const CustomTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("style"),
+        renderHTML: (attributes) => {
+          if (!attributes.style) return {};
+          return { style: attributes.style };
+        },
+      },
+    };
+  },
+});
+
+const CustomTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("style"),
+        renderHTML: (attributes) => {
+          if (!attributes.style) return {};
+          return { style: attributes.style };
+        },
+      },
+    };
+  },
+});
+
 type TiptapEditorProps = {
   value?: string;
   onChange?: (content: string) => void;
@@ -39,6 +98,8 @@ type TiptapEditorProps = {
   highlightedSentences?: string[];
   citationSuggestion?: { originalText: string; suggestedText: string } | null;
   onCitationSuggestionApplied?: () => void;
+  isA4Mode?: boolean;
+  onToggleA4Mode?: () => void;
 };
 
 export function TiptapEditor({
@@ -55,8 +116,14 @@ export function TiptapEditor({
   highlightedSentences = [],
   citationSuggestion,
   onCitationSuggestionApplied,
+  isA4Mode,
+  onToggleA4Mode,
 }: TiptapEditorProps) {
   const highlightedKey = useRef("");
+  const [internalA4Mode, setInternalA4Mode] = useState(true);
+  const currentA4Mode = isA4Mode !== undefined ? isA4Mode : internalA4Mode;
+  const toggleA4Mode = onToggleA4Mode || (() => setInternalA4Mode(!internalA4Mode));
+
   const editor = useEditor({
     immediatelyRender: false,
     editable,
@@ -69,12 +136,10 @@ export function TiptapEditor({
       Placeholder.configure({
         placeholder,
       }),
-      Table.configure({
-        resizable: true,
-      }),
+      CustomTable,
       TableRow,
-      TableHeader,
-      TableCell,
+      CustomTableHeader,
+      CustomTableCell,
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
@@ -88,7 +153,7 @@ export function TiptapEditor({
     editorProps: {
       attributes: {
         class: cn(
-          "tiptap-editor min-h-[350px] w-full bg-white px-6 py-6 text-sm leading-relaxed text-gray-900 focus:outline-none",
+          "tiptap-editor min-h-[350px] w-full bg-transparent text-sm leading-relaxed text-gray-900 focus:outline-none",
           className
         ),
       },
@@ -234,8 +299,37 @@ export function TiptapEditor({
         </BubbleMenu>
       ) : null}
 
-      <EditorToolbar editor={editor} onInsertToc={onInsertToc} />
-      <EditorContent editor={editor} className="prose prose-neutral max-w-none" />
+      <EditorToolbar
+        editor={editor}
+        onInsertToc={onInsertToc}
+        isA4Mode={currentA4Mode}
+        onToggleA4Mode={toggleA4Mode}
+      />
+      <div
+        className={cn(
+          "w-full transition-colors duration-200",
+          currentA4Mode
+            ? "bg-slate-100/80 py-8 px-4 flex flex-col items-center min-h-[750px]"
+            : "bg-white p-4 sm:p-6"
+        )}
+      >
+        {currentA4Mode && (
+          <div className="mb-3 text-[11px] font-medium text-gray-500 flex items-center gap-2 select-none">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Khổ giấy A4 (210 × 297 mm) — Canh lề chuẩn NĐ 30/2020/NĐ-CP (Trái 30mm, Phải 20mm, Trên/Dưới 25mm)</span>
+          </div>
+        )}
+        <div
+          className={cn(
+            "w-full transition-all duration-200",
+            currentA4Mode
+              ? "max-w-[210mm] min-h-[297mm] bg-white shadow-xl border border-gray-300/80 rounded-[2px] p-[25mm_20mm_25mm_30mm]"
+              : "w-full"
+          )}
+        >
+          <EditorContent editor={editor} className="prose prose-neutral max-w-none" />
+        </div>
+      </div>
     </div>
   );
 }

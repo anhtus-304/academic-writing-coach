@@ -23,6 +23,8 @@ import {
   ChevronDown,
   LayoutTemplate,
   FileText,
+  BookOpen,
+  Maximize2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,8 @@ import { cn } from "@/lib/utils";
 type EditorToolbarProps = {
   editor: Editor | null;
   onInsertToc?: () => void;
+  isA4Mode?: boolean;
+  onToggleA4Mode?: () => void;
 };
 
 const FONT_FAMILIES = [
@@ -49,7 +53,12 @@ const FONT_SIZES = [
   { label: "20pt", value: "20pt" },
 ];
 
-export function EditorToolbar({ editor, onInsertToc }: EditorToolbarProps) {
+export function EditorToolbar({
+  editor,
+  onInsertToc,
+  isA4Mode,
+  onToggleA4Mode,
+}: EditorToolbarProps) {
   const [isTableMenuOpen, setIsTableMenuOpen] = useState(false);
 
   if (!editor) {
@@ -442,6 +451,39 @@ export function EditorToolbar({ editor, onInsertToc }: EditorToolbarProps) {
         >
           <FileText className="h-3.5 w-3.5" />
           <span>Mục lục</span>
+        </Button>
+      )}
+
+      {/* 10. Nút Khổ A4 vs Toàn màn hình */}
+      {onToggleA4Mode && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "h-7 px-2 text-[11px] font-medium flex items-center gap-1 border rounded transition",
+            isA4Mode
+              ? "bg-purple-100/90 text-purple-800 border-purple-300 font-semibold"
+              : "bg-white text-gray-700 hover:bg-gray-100 border-gray-200"
+          )}
+          onClick={onToggleA4Mode}
+          title={
+            isA4Mode
+              ? "Đang ở chế độ xem Khổ A4 chuẩn học thuật (Click để chuyển Tràn viền)"
+              : "Đang ở chế độ Tràn viền (Click để chuyển xem Khổ A4 chuẩn học thuật)"
+          }
+        >
+          {isA4Mode ? (
+            <>
+              <BookOpen className="h-3.5 w-3.5 text-purple-700" />
+              <span>Khổ A4</span>
+            </>
+          ) : (
+            <>
+              <Maximize2 className="h-3.5 w-3.5 text-gray-600" />
+              <span>Tràn viền</span>
+            </>
+          )}
         </Button>
       )}
 

@@ -13,9 +13,10 @@ const AGENT_NAME_MAP: Record<string, string> = {
 interface AIUseLogProps {
   projectId?: string;
   refreshTrigger?: number | string;
+  isDockMode?: boolean;
 }
 
-export function AIUseLog({ projectId, refreshTrigger }: AIUseLogProps) {
+export function AIUseLog({ projectId, refreshTrigger, isDockMode = false }: AIUseLogProps) {
   const [logs, setLogs] = useState<AIUseLogItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -100,6 +101,94 @@ export function AIUseLog({ projectId, refreshTrigger }: AIUseLogProps) {
       return dateStr;
     }
   };
+
+  if (isDockMode) {
+    return (
+      <div className="w-full h-full flex flex-col bg-white overflow-hidden text-xs">
+        {/* Compact Sub-header with Stats */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50/70 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-gray-700">Thống kê phiên làm việc:</span>
+            <span className="bg-white border border-gray-200 text-gray-700 px-2 py-0.5 rounded text-[11px]">
+              Tác vụ: <strong>{logs.length}</strong>
+            </span>
+            <span className="bg-purple-50 border border-purple-200 text-purple-700 px-2 py-0.5 rounded text-[11px] font-mono">
+              Tokens: <strong>{totalTokens.toLocaleString('vi-VN')}</strong>
+            </span>
+            <span className="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[11px] font-mono font-semibold">
+              Đã trừ: <strong>-{totalCredits} credits</strong>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="text-[11px] text-gray-600 hover:text-purple-600 bg-white border border-gray-200 hover:border-purple-200 px-2 py-0.5 rounded transition flex items-center gap-1 shadow-2xs"
+            >
+              <span className={loading ? 'animate-spin' : ''}>🔄</span> Làm mới
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Table with Sticky Header */}
+        <div className="flex-1 overflow-auto">
+          <table className="w-full border-collapse text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-gray-100 border-b border-gray-200 text-gray-600 font-semibold shadow-2xs">
+              <tr>
+                <th className="px-3 py-2">Thời gian</th>
+                <th className="px-3 py-2">Tác nhân AI / Hành động</th>
+                <th className="px-3 py-2 text-right">Tokens</th>
+                <th className="px-3 py-2 text-right">Credits</th>
+                <th className="px-3 py-2 text-center">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-gray-700">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="p-4 text-center text-gray-400">
+                    <span className="inline-block animate-spin mr-1">⏳</span> Đang tải nhật ký...
+                  </td>
+                </tr>
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-4 text-center text-gray-400">
+                    Chưa có nhật ký tương tác AI trong đề tài này.
+                  </td>
+                </tr>
+              ) : (
+                logs.map((log) => (
+                  <tr key={log.id} className="hover:bg-purple-50/30 transition">
+                    <td className="px-3 py-2 text-gray-500 font-mono text-[11px] whitespace-nowrap">
+                      {formatTime(log.created_at)}
+                    </td>
+                    <td className="px-3 py-2 font-medium text-gray-900">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-purple-600">✨</span>
+                        <span>{AGENT_NAME_MAP[log.agent_name] || log.agent_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-right text-gray-600 font-mono text-[11px]">
+                      {log.tokens_used > 0 ? log.tokens_used.toLocaleString('vi-VN') : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-bold text-red-600 whitespace-nowrap">
+                      -{log.credits_charged}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Thành công
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 mt-6 w-full">

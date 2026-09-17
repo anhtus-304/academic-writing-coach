@@ -109,6 +109,53 @@ class LLMService:
         )
         return result
 
+    async def generate_text_with_usage(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: Optional[str] = None,
+        temperature: float = 0.4,
+        timeout: Optional[float] = None,
+    ) -> tuple[str, dict[str, Any]]:
+        """Generates raw text response and returns (content_string, usage_dict)."""
+        selected_model = model or self.default_model or settings.DEFAULT_MODEL
+        api_key = self.api_key or settings.OPENROUTER_API_KEY
+        base_url = (self.base_url or settings.OPENROUTER_BASE_URL).rstrip("/")
+        timeout_val = timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT_SECONDS", 30.0)
+
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY is not set.")
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://academic-writing-coach.local",
+            "X-Title": "Academic Writing Coach Agent",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": selected_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": temperature,
+        }
+
+        logger.info(f"Calling OpenRouter chat completion '{selected_model}' (timeout={timeout_val}s)...")
+
+        async with httpx.AsyncClient(timeout=timeout_val) as http_client:
+            response = await http_client.post(
+                f"{base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            res_data = response.json()
+            raw_content = res_data["choices"][0]["message"]["content"]
+            usage = res_data.get("usage", {})
+            return raw_content, usage
+
 
     def _clean_and_parse_json(self, raw_text: str, schema: Type[T]) -> T:
         """Helper to extract JSON block from model response and validate against schema."""

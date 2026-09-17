@@ -28,8 +28,32 @@ import AIUseLog from "@/components/AIUseLog";
 import { formatAuthors, type LiteraturePaper, type LiteratureFilters, type SelectedPaperItem } from "@/components/literature/types";
 import { BibliographyView } from "@/components/citation/BibliographyView";
 import { AgentStepper } from "@/components/agents/AgentStepper";
-
-import { Check, Trash2, BookOpen, Search, ShieldAlert, Sparkles, FileCheck, ExternalLink, Pencil, UploadCloud, X } from "lucide-react";
+import {
+  Check,
+  Trash2,
+  BookOpen,
+  Search,
+  ShieldAlert,
+  Sparkles,
+  FileCheck,
+  ExternalLink,
+  Pencil,
+  UploadCloud,
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Terminal,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  PanelLeft,
+  PanelRight,
+} from "lucide-react";
 
 interface RawSubSection {
   title?: string;
@@ -152,6 +176,72 @@ function WorkspaceContent() {
   const [citationResult, setCitationResult] = useState<CitationCheckResponse | null>(null);
   const [isCitationModalOpen, setIsCitationModalOpen] = useState(false);
   const [citationSuggestion, setCitationSuggestion] = useState<{ originalText: string; suggestedText: string } | null>(null);
+
+  // Layout states: Resizable 3-columns and IDE bottom terminal
+  const [leftWidth, setLeftWidth] = useState(320);
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [rightWidth, setRightWidth] = useState(380);
+  const [isRightCollapsed, setIsRightCollapsed] = useState(false);
+  const [bottomHeight, setBottomHeight] = useState(260);
+  const [isBottomOpen, setIsBottomOpen] = useState(false);
+  const [isBottomMaximized, setIsBottomMaximized] = useState(false);
+
+  const isResizingLeft = useRef(false);
+  const isResizingRight = useRef(false);
+  const isResizingBottom = useRef(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingLeft.current) {
+        const newWidth = Math.min(Math.max(e.clientX, 220), 500);
+        setLeftWidth(newWidth);
+      } else if (isResizingRight.current) {
+        const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 260), 620);
+        setRightWidth(newWidth);
+      } else if (isResizingBottom.current) {
+        const newHeight = Math.min(Math.max(window.innerHeight - e.clientY - 32, 140), 550);
+        setBottomHeight(newHeight);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isResizingLeft.current || isResizingRight.current || isResizingBottom.current) {
+        isResizingLeft.current = false;
+        isResizingRight.current = false;
+        isResizingBottom.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  const startResizingLeft = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingLeft.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  const startResizingRight = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRight.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  const startResizingBottom = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingBottom.current = true;
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  };
 
   // Load project, outline, selected papers and recent search data
   useEffect(() => {
@@ -599,6 +689,11 @@ function WorkspaceContent() {
 
   const selectedPaperIds = selectedPapers.map((sp) => sp.cached_paper_id || sp.id);
 
+  const wordCount = editorContent
+    ? editorContent.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().split(/\s+/).filter(Boolean).length
+    : 0;
+  const pageEstimate = Math.max(1, Math.ceil(wordCount / 350));
+
   if (loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-gray-50 text-gray-700">
@@ -724,6 +819,44 @@ function WorkspaceContent() {
             {saving ? "Đang lưu..." : "💾 Lưu bài viết"}
           </button>
 
+          <div className="h-5 w-px bg-gray-200 mx-0.5" />
+
+          {/* Nút Điều Khiển Bố Cục (Layout Panels: Trái / Terminal / Phải) */}
+          <div className="flex items-center bg-gray-100/90 rounded-lg p-0.5 border border-gray-200/80">
+            <button
+              type="button"
+              onClick={() => setIsLeftCollapsed(!isLeftCollapsed)}
+              className={`p-1.5 rounded transition ${
+                !isLeftCollapsed ? "bg-white text-purple-700 shadow-2xs font-semibold" : "text-gray-500 hover:text-gray-900"
+              }`}
+              title={isLeftCollapsed ? "Mở Cột Trái (Dàn ý)" : "Thu gọn Cột Trái (Dàn ý)"}
+            >
+              <PanelLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsBottomOpen(!isBottomOpen)}
+              className={`p-1.5 rounded transition ${
+                isBottomOpen ? "bg-white text-purple-700 shadow-2xs font-semibold" : "text-gray-500 hover:text-gray-900"
+              }`}
+              title={isBottomOpen ? "Đóng Terminal AI Use Log" : "Mở Terminal AI Use Log"}
+            >
+              <Terminal className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsRightCollapsed(!isRightCollapsed)}
+              className={`p-1.5 rounded transition ${
+                !isRightCollapsed ? "bg-white text-purple-700 shadow-2xs font-semibold" : "text-gray-500 hover:text-gray-900"
+              }`}
+              title={isRightCollapsed ? "Mở Cột Phải (Tài liệu & AI)" : "Thu gọn Cột Phải (Tài liệu & AI)"}
+            >
+              <PanelRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="h-5 w-px bg-gray-200 mx-0.5" />
+
           <CreditBalance initialBalance={user?.credits} refreshTrigger={creditTrigger} />
         </div>
       </header>
@@ -731,41 +864,75 @@ function WorkspaceContent() {
       {/* Main Workspace Layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar: Outline Agent & Editor */}
-        <aside className="w-80 border-r border-gray-200 flex flex-col bg-gray-50/70 shrink-0">
-          <div className="p-3 flex items-center justify-between border-b border-gray-200 bg-white">
-            <div className="flex space-x-1">
-              <button
-                onClick={() => setActiveTab("outline")}
-                className={`text-xs px-2.5 py-1 rounded-md font-medium transition ${
-                  activeTab === "outline" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                Mục lục Dàn ý
-              </button>
-              <button
-                onClick={() => setActiveTab("suggestions")}
-                className={`text-xs px-2.5 py-1 rounded-md font-medium transition ${
-                  activeTab === "suggestions" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                Gợi ý AI
-              </button>
-            </div>
+        {isLeftCollapsed ? (
+          <div className="w-9 border-r border-gray-200 bg-gray-50 flex flex-col items-center py-3 shrink-0 select-none">
             <button
-              onClick={handleGenerateOutline}
-              disabled={generating}
-              className="text-xs bg-purple-600 text-white px-2.5 py-1 rounded-md hover:bg-purple-700 transition shadow-sm font-medium flex items-center active:scale-95"
+              type="button"
+              onClick={() => setIsLeftCollapsed(false)}
+              className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-md transition"
+              title="Mở rộng Dàn ý (Cột Trái)"
             >
-              {generating ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
-                  Đang sinh...
-                </>
-              ) : (
-                "✨ Sinh dàn ý AI"
-              )}
+              <PanelLeftOpen className="w-4 h-4" />
             </button>
+            <span className="mt-8 text-[11px] font-bold text-gray-400 uppercase tracking-widest [writing-mode:vertical-lr] rotate-180">
+              Mục lục Dàn ý
+            </span>
           </div>
+        ) : (
+          <aside
+            style={{ width: `${leftWidth}px` }}
+            className="border-r border-gray-200 flex flex-col bg-gray-50/70 shrink-0 relative"
+          >
+            {/* Left Resize Handle */}
+            <div
+              onMouseDown={startResizingLeft}
+              className="absolute -right-1 top-0 bottom-0 w-2 cursor-col-resize hover:bg-purple-500/50 z-20 transition select-none"
+              title="Kéo sang trái/phải để chỉnh độ rộng Cột Dàn ý"
+            />
+            <div className="p-2.5 flex items-center justify-between border-b border-gray-200 bg-white">
+              <div className="flex space-x-1">
+                <button
+                  onClick={() => setActiveTab("outline")}
+                  className={`text-xs px-2 py-1 rounded-md font-medium transition ${
+                    activeTab === "outline" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Mục lục Dàn ý
+                </button>
+                <button
+                  onClick={() => setActiveTab("suggestions")}
+                  className={`text-xs px-2 py-1 rounded-md font-medium transition ${
+                    activeTab === "suggestions" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Gợi ý AI
+                </button>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleGenerateOutline}
+                  disabled={generating}
+                  className="text-xs bg-purple-600 text-white px-2 py-1 rounded-md hover:bg-purple-700 transition shadow-xs font-medium flex items-center active:scale-95"
+                >
+                  {generating ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
+                      Đang sinh...
+                    </>
+                  ) : (
+                    "✨ Sinh dàn ý AI"
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsLeftCollapsed(true)}
+                  className="p-1 text-gray-400 hover:text-gray-700 rounded hover:bg-gray-100 transition"
+                  title="Thu gọn Cột Trái"
+                >
+                  <PanelLeftClose className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
 
           <div className="flex-1 overflow-y-auto p-3">
             {generating ? (
@@ -884,11 +1051,12 @@ function WorkspaceContent() {
             )}
           </div>
         </aside>
+        )}
 
         {/* Center: Interactive Editor Area */}
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12">
-            <div className="mx-auto w-full max-w-4xl">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-4xl space-y-4">
               <AgentStepper
                 steps={[
                   { label: "Outline Agent", status: outline ? "success" : "pending" },
@@ -898,7 +1066,7 @@ function WorkspaceContent() {
                   { label: "Hoàn tất", status: citationResult ? "success" : "pending" },
                 ]}
               />
-              <h1 className="mb-8 text-center text-2xl font-bold uppercase leading-snug text-gray-900">
+              <h1 className="pt-2 text-center text-2xl font-bold uppercase leading-snug text-gray-900">
                 {project?.topic}
               </h1>
               <TiptapEditor
@@ -922,41 +1090,153 @@ function WorkspaceContent() {
                   setSelectedText(text);
                   setIsAIResponsePanelOpen(true);
                   setRightPanelTab("assistant");
+                  if (isRightCollapsed) setIsRightCollapsed(false);
                 }}
               />
+            </div>
+          </div>
 
-              {/* Báo Cáo Minh Bạch Lịch Sử Sử Dụng AI (Phía dưới Editor) */}
-              <div className="mt-8 border-t border-gray-200 pt-6">
-                <AIUseLog projectId={project?.id} refreshTrigger={creditTrigger} />
+          {/* IDE-style Bottom Terminal Panel: AI Use Log Dock */}
+          {isBottomOpen && (
+            <div
+              style={{ height: isBottomMaximized ? "75vh" : `${bottomHeight}px` }}
+              className="border-t-2 border-purple-600 bg-white flex flex-col shrink-0 shadow-lg relative transition-all duration-75"
+            >
+              {/* Drag handle */}
+              {!isBottomMaximized && (
+                <div
+                  onMouseDown={startResizingBottom}
+                  className="absolute -top-1 left-0 right-0 h-2 cursor-row-resize hover:bg-purple-500/40 z-20"
+                  title="Kéo lên/xuống để chỉnh độ cao Terminal"
+                />
+              )}
+
+              {/* Terminal Header */}
+              <div className="flex items-center justify-between px-3 py-1.5 bg-gray-900 text-gray-200 text-xs shrink-0 select-none">
+                <div className="flex items-center gap-2 font-mono">
+                  <Terminal className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="font-semibold text-white">AI USE LOG & TRANSPARENCY</span>
+                  <span className="text-[10px] bg-gray-800 text-purple-300 px-1.5 py-0.5 rounded border border-gray-700">
+                    Terminal Dock
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsBottomMaximized(!isBottomMaximized)}
+                    className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-800 transition"
+                    title={isBottomMaximized ? "Thu nhỏ về độ cao mặc định" : "Mở rộng toàn màn hình"}
+                  >
+                    {isBottomMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsBottomOpen(false)}
+                    className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-800 transition"
+                    title="Đóng Terminal"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
+
+              {/* Terminal Content */}
+              <div className="flex-1 overflow-hidden">
+                <AIUseLog
+                  projectId={project?.id}
+                  refreshTrigger={creditTrigger}
+                  isDockMode={true}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Academic Workspace Status Bar */}
+          <div className="h-7 border-t border-gray-200 bg-gray-50/90 px-3 flex items-center justify-between text-[11px] text-gray-500 shrink-0 select-none">
+            <div className="flex items-center gap-3">
+              <span>{wordCount.toLocaleString('vi-VN')} từ</span>
+              <span className="text-gray-300">•</span>
+              <span>~{pageEstimate} trang A4</span>
+              <span className="text-gray-300">•</span>
+              <span className="text-purple-700 font-medium">Chuẩn {project?.citation_style?.toUpperCase()}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsBottomOpen(!isBottomOpen)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded transition ${
+                  isBottomOpen
+                    ? "bg-purple-100 text-purple-800 font-semibold"
+                    : "hover:bg-gray-200 text-gray-600"
+                }`}
+                title="Bật/Tắt Terminal Nhật ký tương tác AI"
+              >
+                <Terminal className="w-3 h-3 text-purple-600" />
+                <span>AI Use Log</span>
+                {isBottomOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+              </button>
             </div>
           </div>
         </main>
 
         {/* Right Sidebar: Literature Search & Persistent Selected Papers / AI Assistant */}
-        <aside className="hidden w-full shrink-0 flex-col border-l border-gray-200 bg-gray-50/70 md:flex md:w-80 lg:w-96">
-          <div className="flex shrink-0 border-b border-gray-200 bg-white p-2">
+        {isRightCollapsed ? (
+          <div className="hidden md:flex w-9 border-l border-gray-200 bg-gray-50 flex-col items-center py-3 shrink-0 select-none">
             <button
               type="button"
-              onClick={() => setRightPanelTab("literature")}
-              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition ${
-                rightPanelTab === "literature" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
-              }`}
+              onClick={() => setIsRightCollapsed(false)}
+              className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-md transition"
+              title="Mở rộng Tài liệu & AI Assistant (Cột Phải)"
             >
-              Tài liệu ({selectedPapers.length})
+              <PanelRightOpen className="w-4 h-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => setRightPanelTab("assistant")}
-              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition ${
-                rightPanelTab === "assistant" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              AI Assistant
-            </button>
+            <span className="mt-8 text-[11px] font-bold text-gray-400 uppercase tracking-widest [writing-mode:vertical-lr] rotate-180">
+              Tài liệu & AI
+            </span>
           </div>
+        ) : (
+          <aside
+            style={{ width: `${rightWidth}px` }}
+            className="hidden md:flex flex-col border-l border-gray-200 bg-gray-50/70 shrink-0 relative"
+          >
+            {/* Right Resize Handle */}
+            <div
+              onMouseDown={startResizingRight}
+              className="absolute -left-1 top-0 bottom-0 w-2 cursor-col-resize hover:bg-purple-500/50 z-20 transition select-none"
+              title="Kéo sang trái/phải để chỉnh độ rộng Cột Tài liệu"
+            />
+            <div className="flex shrink-0 border-b border-gray-200 bg-white p-2 items-center">
+              <button
+                type="button"
+                onClick={() => setRightPanelTab("literature")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                  rightPanelTab === "literature" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                Tài liệu ({selectedPapers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRightPanelTab("assistant")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                  rightPanelTab === "assistant" ? "bg-purple-100 text-purple-700" : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                AI Assistant
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRightCollapsed(true)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded hover:bg-gray-100 transition ml-1"
+                title="Thu gọn Cột Phải"
+              >
+                <PanelRightClose className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
             {rightPanelTab === "literature" ? (
               <>
                 {/* Sub-tabs: Tìm kiếm học thuật vs Tài liệu đề tài */}
@@ -1215,6 +1495,7 @@ function WorkspaceContent() {
             )}
           </div>
         </aside>
+        )}
       </div>
 
       {/* Modal Báo Cáo Kiểm Tra Trích Dẫn (Tuần 3) */}

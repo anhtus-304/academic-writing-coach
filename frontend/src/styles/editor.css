@@ -143,26 +143,42 @@
   user-select: all;
 }
 
-/* Định dạng Mục Lục Học Thuật (Table of Contents Block) */
-.tiptap-editor .table-of-contents-block {
-  margin: 1.5rem 0;
-  padding: 1.25rem 1.75rem;
-  background-color: #fdfdfd;
-  border: 1px dashed #d1d5db;
-  border-radius: 8px;
+/* Định dạng Mục Lục Học Thuật (Academic Table of Contents) */
+.tiptap-editor table.academic-toc-table {
+  border: none !important;
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 1.5rem 0 !important;
+  table-layout: auto !important;
 }
 
-.tiptap-editor .toc-item {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+.tiptap-editor table.academic-toc-table th {
+  background-color: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid #1f2937 !important;
+  padding: 8px 6px !important;
+  font-weight: 700 !important;
+  color: #111827 !important;
+  text-transform: uppercase !important;
+  font-size: 11pt !important;
 }
 
-.tiptap-editor .toc-dots {
-  flex-grow: 1;
-  border-bottom: 1px dotted #6b7280;
-  margin: 0 10px;
-  height: 0.9em;
+.tiptap-editor table.academic-toc-table td {
+  border: none !important;
+  border-bottom: 1px dotted #9ca3af !important;
+  padding: 6px 6px !important;
+  vertical-align: bottom !important;
+  background-color: transparent !important;
+}
+
+.tiptap-editor table.academic-toc-table td p,
+.tiptap-editor table.academic-toc-table th p {
+  margin-bottom: 0 !important;
+  line-height: 1.5 !important;
+}
+
+.tiptap-editor table.academic-toc-table tr:hover td {
+  background-color: rgba(243, 244, 246, 0.5) !important;
 }
 
 /* Định dạng in ấn học thuật chuyên dụng (A4 Print Engine) */
