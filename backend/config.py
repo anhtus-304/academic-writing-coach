@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     # CORS settings
     BACKEND_CORS_ORIGINS: List[str]
 
+    # Agent Auto Mode & Pipeline Settings
+    ENABLE_AGENT_AUTO_MODE: bool = True
+    AGENT_AUTO_MODE_DISCLAIMER_REQUIRED: bool = True
+    AGENT_AUTO_CHECKPOINT_COST_OUTLINE: int = 2
+    AGENT_AUTO_CHECKPOINT_COST_LITERATURE: int = 2
+    AGENT_AUTO_CHECKPOINT_COST_CITATION: int = 2
+
     model_config = SettingsConfigDict(
         env_file=[".env", "backend/.env", str(BASE_DIR / ".env")],
         env_file_encoding="utf-8",

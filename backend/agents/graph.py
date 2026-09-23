@@ -39,6 +39,7 @@ class AgentState(TypedDict, total=False):
     literature_results: Optional[Dict[str, Any]]
     citations: Optional[List[Dict[str, Any]]]
     citation_report: Optional[Dict[str, Any]]
+    suggestions: Optional[List[Dict[str, Any]]]
 
     # Workflow Metadata & Orchestration
     current_step: str
@@ -74,6 +75,19 @@ async def outline_node(state: AgentState) -> Dict[str, Any]:
     """LangGraph node wrapper for outline generation step using OutlineAgent."""
     try:
         topic = state.get("topic", "")
+        # Preserve existing outline if provided and non-empty (Human-in-the-loop)
+        existing_outline = state.get("outline")
+        if existing_outline and isinstance(existing_outline, dict):
+            inner = existing_outline.get("outline") or existing_outline
+            if inner.get("sections") or inner.get("chapters"):
+                logger.info(f"[LangGraph:outline_node] Existing outline detected. Preserving it for topic: '{topic}'")
+                return {
+                    "outline": existing_outline,
+                    "current_step": "outline_preserved",
+                    "status": "success",
+                    "error": None,
+                }
+
         logger.info(f"[LangGraph:outline_node] Generating outline for topic: '{topic}'")
         result = await outline_agent.generate_outline(
             topic=topic,
@@ -130,10 +144,37 @@ async def literature_node(state: AgentState) -> Dict[str, Any]:
                 existing_selected.append(p)
                 existing_ids.add(p_id)
 
+        # Create suggestion cards for literature recommendations
+        lit_suggestions = []
+        for idx, p in enumerate(papers[:3]):
+            p_dict = p if isinstance(p, dict) else (p.model_dump() if hasattr(p, "model_dump") else getattr(p, "__dict__", {}))
+            p_id = str(p_dict.get("id") or "")
+            p_title = str(p_dict.get("title") or "")
+            p_reason = str(p_dict.get("relevance_score_reason") or p_dict.get("summary_vi") or "Tài liệu học thuật liên quan mật thiết đến chủ đề nghiên cứu")
+            authors = p_dict.get("authors") or []
+            first_author = str(authors[0]) if authors else "Tài liệu"
+            year = str(p_dict.get("year") or "")
+            lit_suggestions.append({
+                "id": f"sug_lit_{idx + 1}",
+                "type": "literature",
+                "title": f"Gợi ý tài liệu: {p_title[:60]}...",
+                "sentence": None,
+                "reason": p_reason,
+                "suggested_action": f"Lưu bài báo '{p_title}' vào danh mục tài liệu tham khảo",
+                "in_text_suggestion": f"({first_author}, {year})",
+                "recommended_paper_id": p_id,
+                "recommended_paper_title": p_title,
+                "status": "pending",
+            })
+
+        accumulated_suggestions = list(state.get("suggestions") or [])
+        accumulated_suggestions.extend(lit_suggestions)
+
         return {
             "literature_results": lit_data,
             "literature_review": lit_data,
             "selected_papers": existing_selected,
+            "suggestions": accumulated_suggestions,
             "current_step": "literature_completed",
             "status": "success",
             "error": None,
@@ -179,9 +220,36 @@ async def citation_node(state: AgentState) -> Dict[str, Any]:
 
         missing_claims_list = [c.model_dump() for c in report.missing_claims]
 
+        citation_suggestions = []
+        for idx, claim in enumerate(report.missing_claims):
+            c_dict = claim.model_dump() if hasattr(claim, "model_dump") else (claim if isinstance(claim, dict) else getattr(claim, "__dict__", {}))
+            c_sent = str(c_dict.get("sentence") or "")
+            c_reason = str(c_dict.get("reason") or "")
+            c_action = str(c_dict.get("suggested_action") or "")
+            c_in_text = str(c_dict.get("in_text_suggestion")) if c_dict.get("in_text_suggestion") is not None else None
+            c_paper_id = str(c_dict.get("recommended_paper_id")) if c_dict.get("recommended_paper_id") is not None else None
+            c_paper_title = str(c_dict.get("recommended_paper_title")) if c_dict.get("recommended_paper_title") is not None else None
+
+            citation_suggestions.append({
+                "id": f"sug_cit_{idx + 1}",
+                "type": "citation",
+                "title": f"Thiếu trích dẫn: {c_sent[:50]}...",
+                "sentence": c_sent,
+                "reason": c_reason,
+                "suggested_action": c_action,
+                "in_text_suggestion": c_in_text,
+                "recommended_paper_id": c_paper_id,
+                "recommended_paper_title": c_paper_title,
+                "status": "pending",
+            })
+
+        accumulated_suggestions = list(state.get("suggestions") or [])
+        accumulated_suggestions.extend(citation_suggestions)
+
         return {
             "citation_report": report_data,
             "citations": missing_claims_list,
+            "suggestions": accumulated_suggestions,
             "current_step": "citation_checked",
             "status": "completed",
             "error": None,

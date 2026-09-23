@@ -44,7 +44,10 @@ class MockAgentsDBSession:
     async def execute(self, statement):
         mock_result = MagicMock()
         stmt_str = str(statement).lower()
-        if "users" in stmt_str:
+        if "select users.credit_balance" in stmt_str:
+            mock_result.scalar_one_or_none = MagicMock(return_value=self.user.credit_balance)
+            mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[self.user.credit_balance])))
+        elif "users" in stmt_str:
             mock_result.scalar_one_or_none = MagicMock(return_value=self.user)
             mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[self.user])))
         elif "projects" in stmt_str:
@@ -174,3 +177,137 @@ async def test_outline_generation_deducts_credits(mock_outline_obj, monkeypatch)
             assert res_fail.status_code == 402
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_estimate_endpoint(monkeypatch):
+    test_user = User(id="user-pipe-est", email="pipe_est@edu.vn", credit_balance=10)
+
+    from database import get_db
+    async def override_db():
+        yield MockAgentsDBSession(test_user)
+
+    app.dependency_overrides[get_db] = override_db
+
+    try:
+        from backend.api.dependencies import get_current_user
+        app.dependency_overrides[get_current_user] = lambda: test_user
+    except ImportError:
+        from api.dependencies import get_current_user
+        app.dependency_overrides[get_current_user] = lambda: test_user
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            res = await client.post("/api/v1/agents/pipeline/estimate", json={})
+            assert res.status_code == 200
+            data = res.json()
+            assert data["estimated_cost"] == 6
+            assert data["sufficient_balance"] is True
+            assert len(data["stages"]) == 3
+            assert data["disclaimer_required"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_run_disclaimer_validation(monkeypatch):
+    test_user = User(id="user-pipe-run", email="pipe_run@edu.vn", credit_balance=10)
+
+    from database import get_db
+    async def override_db():
+        yield MockAgentsDBSession(test_user)
+
+    app.dependency_overrides[get_db] = override_db
+
+    try:
+        from backend.api.dependencies import get_current_user
+        app.dependency_overrides[get_current_user] = lambda: test_user
+    except ImportError:
+        from api.dependencies import get_current_user
+        app.dependency_overrides[get_current_user] = lambda: test_user
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            # Without disclaimer_accepted
+            res = await client.post("/api/v1/agents/pipeline/run", json={"disclaimer_accepted": False})
+            assert res.status_code == 400
+            assert "Liêm chính Học thuật" in res.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_run_success_and_metering(monkeypatch):
+    test_user = User(id="user-pipe-meter", email="meter@edu.vn", credit_balance=20)
+
+    try:
+        from backend.agents.outline_agent import OutlineAgent
+        from backend.agents.literature_agent import LiteratureAgent
+        from backend.agents.citation_agent import CitationAgent
+        from backend.schemas.outline_schemas import AcademicOutline, OutlineSection
+        from backend.schemas.citation_schemas import CitationCheckResponse, MissingCitationClaim
+    except ImportError:
+        from agents.outline_agent import OutlineAgent
+        from agents.literature_agent import LiteratureAgent
+        from agents.citation_agent import CitationAgent
+        from schemas.outline_schemas import AcademicOutline, OutlineSection
+        from schemas.citation_schemas import CitationCheckResponse, MissingCitationClaim
+
+    mock_out = AcademicOutline(
+        topic="Nghiên cứu AI",
+        document_type="tieu_luan",
+        field="CNTT",
+        language="vi",
+        total_estimated_pages="10 trang",
+        sections=[OutlineSection(section_code="CH1", title="Chương 1", description="Intro")],
+    )
+    mock_lit = MagicMock()
+    mock_lit.model_dump.return_value = {"query": "AI", "total_results": 0, "papers": []}
+    mock_cite = CitationCheckResponse(
+        total_issues=1,
+        missing_claims=[MissingCitationClaim(sentence="80% sinh viên dùng AI.", reason="Data", suggested_action="Trích dẫn")],
+    )
+
+    monkeypatch.setattr(OutlineAgent, "generate_outline", AsyncMock(return_value=mock_out))
+    monkeypatch.setattr(LiteratureAgent, "search_and_summarize", AsyncMock(return_value=mock_lit))
+    monkeypatch.setattr(CitationAgent, "check_document_citations", AsyncMock(return_value=mock_cite))
+
+    from database import get_db
+    async def override_db():
+        yield MockAgentsDBSession(test_user)
+
+    app.dependency_overrides[get_db] = override_db
+
+    try:
+        from backend.api.dependencies import get_current_user
+        app.dependency_overrides[get_current_user] = lambda: test_user
+    except ImportError:
+        from api.dependencies import get_current_user
+        app.dependency_overrides[get_current_user] = lambda: test_user
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            res = await client.post(
+                "/api/v1/agents/pipeline/run",
+                json={
+                    "disclaimer_accepted": True,
+                    "draft_content": "80% sinh viên dùng AI trong học tập.",
+                    "stages": ["outline", "literature", "citation"],
+                },
+            )
+            assert res.status_code == 200
+            data = res.json()
+            assert data["status"] == "completed"
+            assert data["total_credits_charged"] == 6
+            assert "outline" in data["completed_stages"]
+            assert "literature" in data["completed_stages"]
+            assert "citation" in data["completed_stages"]
+            assert len(data["suggestions"]) >= 1
+            assert test_user.credit_balance == 14
+    finally:
+        app.dependency_overrides.clear()
+
+

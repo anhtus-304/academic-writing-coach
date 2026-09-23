@@ -357,12 +357,90 @@ export interface AskAIResponseData {
   credits_charged: number;
 }
 
+export interface StageEstimateItem {
+  name: string;
+  cost: number;
+  skip_available: boolean;
+  description: string;
+}
+
+export interface PipelineEstimateResponse {
+  estimated_cost: number;
+  user_balance: number;
+  sufficient_balance: boolean;
+  disclaimer_required: boolean;
+  stages: StageEstimateItem[];
+}
+
+export interface SuggestionItem {
+  id: string;
+  type: "citation" | "literature" | "outline" | string;
+  title: string;
+  sentence?: string;
+  reason?: string;
+  suggested_action: string;
+  in_text_suggestion?: string;
+  recommended_paper_id?: string;
+  recommended_paper_title?: string;
+  status: "pending" | "accepted" | "rejected";
+}
+
+export interface PipelineRunRequestPayload {
+  project_id?: string;
+  topic?: string;
+  document_type?: string;
+  field?: string;
+  citation_style?: string;
+  target_length?: string;
+  template_id?: string;
+  user_requirements?: string;
+  draft_content?: string;
+  disclaimer_accepted: boolean;
+  stages?: string[];
+}
+
+export interface PipelineRunResponseData {
+  project_id: string;
+  status: "running" | "completed" | "failed" | string;
+  completed_stages: string[];
+  total_credits_charged: number;
+  user_balance_after: number;
+  outline?: Record<string, unknown>;
+  literature_review?: Record<string, unknown>;
+  citation_report?: Record<string, unknown>;
+  suggestions: SuggestionItem[];
+  error?: string;
+}
+
+export interface PipelineStateResponseData {
+  project_id: string;
+  status: string;
+  current_step?: string;
+  outline?: Record<string, unknown>;
+  literature_review?: Record<string, unknown>;
+  citation_report?: Record<string, unknown>;
+  suggestions: SuggestionItem[];
+  error?: string;
+}
+
 export const agentApi = {
   askAI: (payload: AskAIRequestPayload) =>
     apiFetch<AskAIResponseData>("/api/v1/agents/ask", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  estimatePipeline: (payload: { project_id?: string; stages?: string[]; skip_existing_outline?: boolean }) =>
+    apiFetch<PipelineEstimateResponse>("/api/v1/agents/pipeline/estimate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  runPipeline: (payload: PipelineRunRequestPayload) =>
+    apiFetch<PipelineRunResponseData>("/api/v1/agents/pipeline/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getPipelineState: (projectId: string) =>
+    apiFetch<PipelineStateResponseData>(`/api/v1/agents/pipeline/${projectId}/state`),
 };
 
 export async function apiDownload(path: string, body: unknown, defaultFilename: string) {
