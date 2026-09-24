@@ -101,6 +101,12 @@ async def dev_login(data: DevLoginRequest = DevLoginRequest(), db: AsyncSession 
         db.add(user)
         await db.commit()
         await db.refresh(user)
+    elif data.name and user.display_name != data.name:
+        # Keep the local identity fresh on every dev login (same behaviour as the
+        # Google callback, which refreshes ``display_name`` for existing users).
+        user.display_name = data.name
+        await db.commit()
+        await db.refresh(user)
 
     access_token = create_access_token(data={"sub": user.id, "email": user.email})
     response_content = {

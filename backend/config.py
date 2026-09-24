@@ -54,6 +54,25 @@ class Settings(BaseSettings):
 
     # CORS settings
     BACKEND_CORS_ORIGINS: List[str]
+    # Regex bổ sung cho domain deploy (Vercel preview/production: https://*.vercel.app)
+    BACKEND_CORS_ORIGIN_REGEX: Optional[str] = r"https://([a-z0-9-]+\.)*vercel\.app"
+
+    # Literature search mode: "real" | "mock" | "auto"
+    LITERATURE_MODE: str = "auto"
+
+    # Middleware / Rate limiting (in-memory sliding window per user/IP)
+    # Mặc định tuần 3: tối đa 60 request / 60 giây cho mỗi user (token) hoặc IP.
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS: int = 60
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_EXEMPT_PATHS: List[str] = [
+        "/api/v1/health",
+        "/health",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/favicon.ico",
+    ]
 
     model_config = SettingsConfigDict(
         env_file=[".env", "backend/.env", str(BASE_DIR / ".env")],

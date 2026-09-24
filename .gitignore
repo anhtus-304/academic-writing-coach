@@ -12,3 +12,5 @@ out/
 .DS_Store 
 Thumbs.db 
 doc/
+_test_e2e.db
+_test_*.db

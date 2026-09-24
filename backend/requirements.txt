@@ -33,6 +33,7 @@ python-dateutil==2.9.*
 # Testing 
 pytest==8.4.* 
 pytest-asyncio==1.0.* 
+aiosqlite==0.21.*   # SQLite (async) test database used by tests/conftest.py
  
 # Dev Tools 
 ruff==0.11.* 
