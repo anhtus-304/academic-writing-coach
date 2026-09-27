@@ -50,22 +50,46 @@ class AgentState(TypedDict, total=False):
     custom_user_note: Optional[str]
 
 
-def _format_outline_for_literature(outline_dict: Optional[Dict[str, Any]]) -> str:
+def _format_outline_for_literature(outline_dict: Optional[Any]) -> str:
     """Helper to convert structured outline into a readable summary for LiteratureAgent."""
     if not outline_dict:
         return ""
-    inner = outline_dict.get("outline") or outline_dict
-    sections = inner.get("sections") or inner.get("chapters") or []
+    if isinstance(outline_dict, str):
+        return outline_dict
+
+    inner = outline_dict.get("outline") or outline_dict if isinstance(outline_dict, dict) else outline_dict
+    if isinstance(inner, str):
+        return inner
+
+    if isinstance(inner, dict):
+        sections = inner.get("sections") or inner.get("chapters") or []
+        fallback_title = str(inner.get("title", ""))
+    elif isinstance(inner, list):
+        sections = inner
+        fallback_title = ""
+    else:
+        return str(inner)
+
+    if isinstance(sections, dict):
+        sections = list(sections.values())
+    elif not isinstance(sections, list):
+        sections = [sections]
+
     lines: List[str] = []
     for s in sections:
-        title = s.get("title") or s.get("heading") or ""
-        if title:
-            lines.append(f"- {title}")
-        for sub in s.get("subsections", []):
-            sub_title = sub.get("title") if isinstance(sub, dict) else str(sub)
-            if sub_title:
-                lines.append(f"  * {sub_title}")
-    return "\n".join(lines) if lines else str(inner.get("title", ""))
+        if isinstance(s, str):
+            lines.append(f"- {s}")
+        elif isinstance(s, dict):
+            title = s.get("title") or s.get("heading") or ""
+            if title:
+                lines.append(f"- {title}")
+            for sub in s.get("subsections", []):
+                sub_title = sub.get("title") if isinstance(sub, dict) else str(sub)
+                if sub_title:
+                    lines.append(f"  * {sub_title}")
+        else:
+            lines.append(f"- {s}")
+    return "\n".join(lines) if lines else fallback_title
 
 
 # =====================================================================
@@ -77,9 +101,14 @@ async def outline_node(state: AgentState) -> Dict[str, Any]:
         topic = state.get("topic", "")
         # Preserve existing outline if provided and non-empty (Human-in-the-loop)
         existing_outline = state.get("outline")
-        if existing_outline and isinstance(existing_outline, dict):
-            inner = existing_outline.get("outline") or existing_outline
-            if inner.get("sections") or inner.get("chapters"):
+        if existing_outline:
+            inner = existing_outline.get("outline") or existing_outline if isinstance(existing_outline, dict) else existing_outline
+            has_sections = False
+            if isinstance(inner, dict):
+                has_sections = bool(inner.get("sections") or inner.get("chapters"))
+            elif isinstance(inner, list):
+                has_sections = len(inner) > 0
+            if has_sections:
                 logger.info(f"[LangGraph:outline_node] Existing outline detected. Preserving it for topic: '{topic}'")
                 return {
                     "outline": existing_outline,

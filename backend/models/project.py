@@ -40,6 +40,8 @@ else:
         search_sessions = relationship("SearchSession", back_populates="project", cascade="all, delete-orphan")
         selected_papers = relationship("SelectedPaper", back_populates="project", cascade="all, delete-orphan")
         draft_documents = relationship("DraftDocument", back_populates="project", cascade="all, delete-orphan")
+        agent_jobs = relationship("AgentJob", backref="project", cascade="all, delete-orphan")
+        document_versions = relationship("DocumentVersion", backref="project", cascade="all, delete-orphan")
 
 
 

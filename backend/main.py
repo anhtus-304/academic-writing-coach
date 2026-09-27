@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from api.routes import auth, projects, credits, health, literature, agents, citation
+from api.routes import auth, projects, credits, health, literature, agents, citation, agent_jobs
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -20,6 +20,7 @@ app.include_router(health.router, prefix=settings.API_V1_STR)
 app.include_router(literature.router, prefix=settings.API_V1_STR)
 app.include_router(agents.router, prefix=settings.API_V1_STR)
 app.include_router(citation.router, prefix=settings.API_V1_STR)
+app.include_router(agent_jobs.router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 async def root():

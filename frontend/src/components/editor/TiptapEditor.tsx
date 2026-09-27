@@ -18,12 +18,59 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { FontSize } from "./extensions/FontSize";
 
+import { Mark } from "@tiptap/core";
+import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import "@/styles/editor.css";
 import { EditorToolbar } from "./EditorToolbar";
 import { AIBubbleMenu } from "./AIBubbleMenu";
+
+// Marks cho Inline Diff / Track Changes
+export const DiffIns = Mark.create({
+  name: "diffIns",
+  inclusive: false,
+  parseHTML() {
+    return [
+      {
+        tag: "ins",
+        getAttrs: (element) => {
+          if (typeof element === "string") return {};
+          return {
+            class: element.getAttribute("class") || "diff-ins",
+            "data-op-id": element.getAttribute("data-op-id"),
+          };
+        },
+      },
+    ];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["ins", HTMLAttributes, 0];
+  },
+});
+
+export const DiffDel = Mark.create({
+  name: "diffDel",
+  inclusive: false,
+  parseHTML() {
+    return [
+      {
+        tag: "del",
+        getAttrs: (element) => {
+          if (typeof element === "string") return {};
+          return {
+            class: element.getAttribute("class") || "diff-del",
+            "data-op-id": element.getAttribute("data-op-id"),
+          };
+        },
+      },
+    ];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["del", HTMLAttributes, 0];
+  },
+});
 
 // Mở rộng Table để hỗ trợ class và inline style cho Mục Lục & Bảng học thuật
 const CustomTable = Table.extend({
@@ -148,6 +195,8 @@ export function TiptapEditor({
       FontSize,
       Underline,
       Highlight.configure({ multicolor: true }),
+      DiffIns,
+      DiffDel,
     ],
     content: value || "<p></p>",
     editorProps: {
@@ -287,6 +336,45 @@ export function TiptapEditor({
           >
             Underline
           </Button>
+
+          {(editor.isActive("diffIns") || editor.isActive("diffDel")) && (
+            <div className="flex items-center gap-1 border-l border-gray-200 pl-1 ml-1">
+              <Button
+                type="button"
+                size="sm"
+                className="h-6 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-md gap-1"
+                onClick={() => {
+                  if (editor.isActive("diffIns")) {
+                    editor.chain().focus().unsetMark("diffIns").run();
+                  } else if (editor.isActive("diffDel")) {
+                    editor.chain().focus().deleteSelection().run();
+                  }
+                }}
+                title="Chấp nhận thay đổi này vào bài viết"
+              >
+                <Check className="h-3 w-3" />
+                <span>Giữ lại</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700 rounded-md gap-1"
+                onClick={() => {
+                  if (editor.isActive("diffIns")) {
+                    editor.chain().focus().deleteSelection().run();
+                  } else if (editor.isActive("diffDel")) {
+                    editor.chain().focus().unsetMark("diffDel").run();
+                  }
+                }}
+                title="Bỏ qua thay đổi này"
+              >
+                <X className="h-3 w-3" />
+                <span>Bỏ qua</span>
+              </Button>
+            </div>
+          )}
+
           <AIBubbleMenu
             onAskAI={() => {
               const text = editor.state.doc.textBetween(

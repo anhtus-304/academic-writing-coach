@@ -443,6 +443,185 @@ export const agentApi = {
     apiFetch<PipelineStateResponseData>(`/api/v1/agents/pipeline/${projectId}/state`),
 };
 
+// ── Agent Job Types (Phase 1 & 2 Canonical API) ──────────────────────
+
+export interface StagePlanItem {
+  stage_id: string;
+  stage_type: "inspect_context" | "build_outline" | "research" | "extract_evidence" | "compose" | "validate" | "build_proposal" | string;
+  description: string;
+  depends_on: string[];
+  estimated_credits: number;
+}
+
+export interface StageProgressItem {
+  stage_id: string;
+  stage_type: string;
+  order: number;
+  status: "pending" | "running" | "completed" | "failed" | "skipped";
+  tokens_used: number;
+  credits_charged: number;
+  error?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface ProposalOperation {
+  operation_id: string;
+  type: "replace" | "insert" | "delete" | "outline_patch" | "select_source";
+  start?: number | null;
+  end?: number | null;
+  before?: string | null;
+  after?: string | null;
+  source_refs: string[];
+  status: "pending" | "accepted" | "rejected";
+}
+
+export interface ProposalData {
+  proposal_id: string;
+  base_version: number;
+  base_hash: string;
+  target_type: "document" | "outline" | "selected_papers";
+  target_section_id?: string | null;
+  operations: ProposalOperation[];
+  warnings: string[];
+  status: "pending" | "partially_accepted" | "accepted" | "rejected" | "applied" | "conflict";
+  tracked_html?: string | null;
+  summary?: {
+    composed_words?: number;
+    operations_count?: number;
+    sources_count?: number;
+    source_refs?: string[];
+    warnings_count?: number;
+    [key: string]: unknown;
+  } | null;
+}
+
+export interface OperationDecision {
+  operation_id?: string | null;
+  decision: "accept" | "reject";
+  reason?: string | null;
+}
+
+export interface CreateJobPayload {
+  project_id: string;
+  mode: "ask" | "auto";
+  prompt: string;
+  target_section?: string | null;
+  requested_action?: string | null;
+  language?: string;
+  citation_style?: string | null;
+  selection?: string | null;
+  client_context_version?: number | null;
+  disclaimer_accepted?: boolean;
+  idempotency_key?: string | null;
+}
+
+export interface CreateJobResponse {
+  job_id: string;
+  status: "queued" | "running" | "awaiting_approval" | "completed" | "failed" | "cancelled";
+  mode: "ask" | "auto";
+  estimated_credits: number;
+  plan?: StagePlanItem[] | null;
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+}
+
+export interface GetJobResponse {
+  job_id: string;
+  project_id: string;
+  mode: "ask" | "auto";
+  status: "queued" | "running" | "awaiting_approval" | "applying" | "completed" | "failed" | "cancelled";
+  prompt_summary?: string | null;
+  plan?: StagePlanItem[] | null;
+  stages: StageProgressItem[];
+  proposals: ProposalData[];
+  estimated_credits: number;
+  actual_credits: number;
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+  created_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface CancelJobResponse {
+  job_id: string;
+  status: string;
+  credits_refunded: number;
+}
+
+export interface ProposalDecisionPayload {
+  decisions?: OperationDecision[];
+  accept_all?: boolean;
+  reject_all?: boolean;
+}
+
+export interface ProposalDecisionResponse {
+  proposal_id: string;
+  status: string;
+  operations: ProposalOperation[];
+}
+
+export interface ApplyProposalPayload {
+  proposal_id: string;
+  accepted_operation_ids?: string[];
+  base_version: number;
+  base_hash: string;
+  action?: "accept_all" | "reject_all" | "resolve_chunk" | "apply";
+  target_operation_id?: string | null;
+}
+
+export interface ApplyProposalResponse {
+  success: boolean;
+  new_version: number;
+  applied_operations: string[];
+  conflicts: Array<Record<string, unknown>>;
+  undo_token?: string | null;
+  content?: string | null;
+}
+
+export interface UndoPayload {
+  proposal_id: string;
+  undo_token?: string | null;
+}
+
+export interface UndoResponse {
+  success: boolean;
+  restored_version: number;
+  message: string;
+}
+
+export const agentJobApi = {
+  createJob: (payload: CreateJobPayload) =>
+    apiFetch<CreateJobResponse>("/api/v1/agent-jobs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getJob: (jobId: string) =>
+    apiFetch<GetJobResponse>(`/api/v1/agent-jobs/${jobId}`),
+  getActiveJob: (projectId: string) =>
+    apiFetch<GetJobResponse | null>(`/api/v1/agent-jobs/active?project_id=${projectId}`),
+  cancelJob: (jobId: string) =>
+    apiFetch<CancelJobResponse>(`/api/v1/agent-jobs/${jobId}/cancel`, {
+      method: "POST",
+    }),
+  submitDecisions: (jobId: string, proposalId: string, payload: ProposalDecisionPayload) =>
+    apiFetch<ProposalDecisionResponse>(`/api/v1/agent-jobs/${jobId}/proposals/${proposalId}/decisions`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  applyProposal: (jobId: string, payload: ApplyProposalPayload) =>
+    apiFetch<ApplyProposalResponse>(`/api/v1/agent-jobs/${jobId}/apply`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  undoProposal: (jobId: string, payload: UndoPayload) =>
+    apiFetch<UndoResponse>(`/api/v1/agent-jobs/${jobId}/undo`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+};
+
 export async function apiDownload(path: string, body: unknown, defaultFilename: string) {
   const token = getAuthToken();
   const res = await fetch(`${API_BASE_URL}${path}`, {

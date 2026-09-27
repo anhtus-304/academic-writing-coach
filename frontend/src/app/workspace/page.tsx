@@ -1479,13 +1479,66 @@ function WorkspaceContent() {
               </>
             ) : isAIResponsePanelOpen || rightPanelTab === "assistant" ? (
               <AIResponsePanel
-                selectedText={selectedText || "Hãy bôi đen một câu hoặc đoạn văn bản trong Editor để AI Coach phân tích, giải thích thuật ngữ hoặc viết lại theo chuẩn học thuật."}
+                selectedText={selectedText}
                 projectId={project?.id}
                 onCreditDeducted={() => setCreditTrigger((c) => c + 1)}
                 onClose={() => {
                   setIsAIResponsePanelOpen(false);
                   setSelectedText("");
                   setRightPanelTab("literature");
+                }}
+                onInsertAtCursor={(text) => {
+                  setInsertReferenceHtml(text);
+                }}
+                onReplaceSelection={(text) => {
+                  setInsertReferenceHtml(text);
+                }}
+                onProposalReady={async (proposal) => {
+                  if (proposal.tracked_html) {
+                    setEditorContent(proposal.tracked_html);
+                    setSaveStatus("Đã tải Track Changes từ Agent");
+                  } else if (project?.id) {
+                    const docRes = await documentApi.get(project.id).catch(() => null);
+                    if (docRes?.success && docRes.document?.html) {
+                      setEditorContent(docRes.document.html);
+                      setSaveStatus("Đã tải Track Changes từ Agent");
+                    }
+                  }
+                }}
+                onApplySuggestion={(sug) => {
+                  if (sug.in_text_suggestion) {
+                    setInsertReferenceHtml(` <span>${sug.in_text_suggestion}</span> `);
+                  }
+                }}
+                onApplyProposal={async (proposal, result) => {
+                  if (result.success && project?.id) {
+                    if (result.content) {
+                      setEditorContent(result.content);
+                      setSaveStatus("Đã cập nhật từ AI Agent");
+                    } else {
+                      const docRes = await documentApi.get(project.id).catch(() => null);
+                      if (docRes?.success && docRes.document?.html) {
+                        setEditorContent(docRes.document.html);
+                        setSaveStatus("Đã cập nhật từ AI Agent");
+                      }
+                    }
+                    if (proposal.target_type === "outline") {
+                      const outlineRes = await outlineApi.get(project.id).catch(() => null);
+                      if (outlineRes?.success && outlineRes.outline) {
+                        setOutline(outlineRes.outline);
+                        setOutlineNodes(transformBackendOutlineToNodes(outlineRes.outline.chapters));
+                      }
+                    }
+                  }
+                }}
+                onUndoProposal={async (proposal, result) => {
+                  if (result.success && project?.id) {
+                    const docRes = await documentApi.get(project.id).catch(() => null);
+                    if (docRes?.success && docRes.document?.html) {
+                      setEditorContent(docRes.document.html);
+                      setSaveStatus("Đã hoàn tác");
+                    }
+                  }
                 }}
               />
             ) : (

@@ -1,5 +1,6 @@
 import re
 import json
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Set
 from pydantic import BaseModel, Field
@@ -618,20 +619,27 @@ class CitationAgent(BaseAgent):
         5. LLM filters out author self-claims and common knowledge, and matches candidate claims
            with suitable papers in selected_papers.
         """
-        plain_text = self.clean_html_to_text(content)
-        sentences = self.split_into_sentences(plain_text)
+        # --- Phase 1: Deterministic In-text Extraction & Cross-referencing (CPU-bound) ---
+        def _phase1_deterministic() -> Tuple[List[str], List[str], List[str], List[UncitedPaperItem], int]:
+            plain_text = self.clean_html_to_text(content)
+            sentences = self.split_into_sentences(plain_text)
+            in_text_citations = self.extract_in_text_citations(plain_text)
+            invalid_cits, warnings, uncited, verified = self.cross_reference_citations(
+                in_text_citations=in_text_citations,
+                selected_papers=selected_papers,
+                citation_style=citation_style,
+            )
+            candidates = self.detect_candidate_missing_claims(sentences)
+            return candidates, invalid_cits, warnings, uncited, verified
 
-        # --- Phase 1: Deterministic In-text Extraction & Cross-referencing ---
-        in_text_citations = self.extract_in_text_citations(plain_text)
-
-        invalid_citations, citation_warnings, uncited_papers, verified_count = self.cross_reference_citations(
-            in_text_citations=in_text_citations,
-            selected_papers=selected_papers,
-            citation_style=citation_style,
-        )
-
-        # Fast heuristic candidate pre-filtering
-        candidate_claims = self.detect_candidate_missing_claims(sentences)
+        # Offload regex matching and document tokenization to worker thread
+        (
+            candidate_claims,
+            invalid_citations,
+            citation_warnings,
+            uncited_papers,
+            verified_count,
+        ) = await asyncio.to_thread(_phase1_deterministic)
 
         # --- Phase 2: LLM Semantic Arbitration ---
         missing_claims = await self.arbitrate_claims_with_llm(

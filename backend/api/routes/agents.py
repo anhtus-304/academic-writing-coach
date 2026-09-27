@@ -92,7 +92,13 @@ class AskAIResponse(BaseModel):
     credits_charged: int
 
 
-@router.post("/ask", response_model=AskAIResponse)
+@router.post(
+    "/ask",
+    response_model=AskAIResponse,
+    deprecated=True,
+    summary="[Legacy] Hỏi đáp AI",
+    description="Endpoint cũ. Đã chuyển sang canonical POST /api/v1/agent-jobs với mode='ask'.",
+)
 async def ask_agent(
     body: AskAIRequest,
     current_user: User = Depends(get_current_user),
@@ -235,7 +241,13 @@ class PipelineStateResponse(BaseModel):
     error: Optional[str] = None
 
 
-@router.post("/pipeline/estimate", response_model=PipelineEstimateResponse)
+@router.post(
+    "/pipeline/estimate",
+    response_model=PipelineEstimateResponse,
+    deprecated=True,
+    summary="[Legacy] Dự tính chi phí Auto",
+    description="Endpoint cũ. Đã chuyển sang canonical POST /api/v1/agent-jobs.",
+)
 async def estimate_pipeline_cost(
     body: PipelineEstimateRequest,
     current_user: User = Depends(get_current_user),
@@ -289,7 +301,13 @@ async def estimate_pipeline_cost(
     )
 
 
-@router.post("/pipeline/run", response_model=PipelineRunResponse)
+@router.post(
+    "/pipeline/run",
+    response_model=PipelineRunResponse,
+    deprecated=True,
+    summary="[Legacy] Khởi chạy Auto Pipeline",
+    description="Endpoint cũ. Đã chuyển sang canonical POST /api/v1/agent-jobs với mode='auto'.",
+)
 async def run_pipeline_auto_mode(
     body: PipelineRunRequest,
     current_user: User = Depends(get_current_user),
@@ -552,7 +570,13 @@ async def run_pipeline_auto_mode(
     )
 
 
-@router.get("/pipeline/{project_id}/state", response_model=PipelineStateResponse)
+@router.get(
+    "/pipeline/{project_id}/state",
+    response_model=PipelineStateResponse,
+    deprecated=True,
+    summary="[Legacy] Trạng thái Pipeline",
+    description="Endpoint cũ. Đã chuyển sang canonical GET /api/v1/agent-jobs/{job_id}.",
+)
 async def get_project_pipeline_state(
     project_id: str,
     current_user: User = Depends(get_current_user),

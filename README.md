@@ -11,7 +11,9 @@ Hệ thống Hỗ trợ Viết bài Nghiên cứu & Luận văn Học thuật th
 4. [Hướng dẫn lấy Google OAuth Credentials](#4-hướng-dẫn-lấy-google_client_id-và-google_client_secret)
 5. [Cài đặt & Khởi chạy Backend](#5-cài-đặt--khởi-chạy-backend-fastapi)
 6. [Cài đặt & Khởi chạy Frontend](#6-cài-đặt--khởi-chạy-frontend-nextjs)
-7. [Kiểm thử Hệ thống (Testing)](#7-kiểm-thử-hệ-thống-testing)
+7. [Tìm kiếm Tài liệu & Tóm tắt Học thuật](#7-tích-hợp-tính-năng-tìm-kiếm-tài-liệu-khoa-học--tóm-tắt-tiếng-việt)
+8. [Tính năng Multi-Agent Workspace (Copilot Workspace Style)](#8-tính-năng-multi-agent-workspace-execution-copilot-workspace-style)
+9. [Kiểm thử Hệ thống (Testing)](#9-kiểm-thử-hệ-thống-testing)
 
 ---
 
@@ -39,7 +41,7 @@ docker run --name academic-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWO
 
 *Kiểm tra Docker container đang chạy:*
 ```bash
-docker ps
+docker ps -f "name=academic-postgres"
 ```
 
 ---
@@ -57,17 +59,31 @@ CREATE DATABASE academic_writing;
 ---
 
 ### 🔹 Khởi tạo cấu trúc bảng Database (Migration với Alembic)
-Sau khi database đã sẵn sàng và đã kích hoạt môi trường ảo `venv` của backend:
+Sau khi database đã sẵn sàng, chạy migration để tạo đầy đủ 15 bảng cơ sở dữ liệu:
 
-```bash
+**Trên Windows (PowerShell):**
+```powershell
 cd backend
+# Chạy trực tiếp qua Python trong môi trường ảo venv:
+.\venv\Scripts\python.exe -m alembic upgrade head
+
+# Hoặc kích hoạt môi trường ảo trước:
+.\venv\Scripts\Activate.ps1
 alembic upgrade head
 ```
 
-*Kiểm tra danh sách bảng đã tạo trong Docker:*
+**Trên Linux / macOS (Bash):**
+```bash
+cd backend
+source venv/bin/activate
+alembic upgrade head
+```
+
+*Kiểm tra danh sách bảng đã tạo trong Docker container:*
 ```bash
 docker exec -it academic-postgres psql -U postgres -d academic_writing -c "\dt"
 ```
+*(Cơ sở dữ liệu sẽ bao gồm 15 bảng: `users`, `projects`, `outlines`, `draft_documents`, `document_versions`, `search_sessions`, `cached_papers`, `selected_papers`, `credit_transactions`, `ai_use_logs`, `alembic_version`, `agent_jobs`, `agent_job_stages`, `agent_proposals`, `agent_decisions`)*.
 
 ---
 
@@ -94,10 +110,10 @@ DATABASE_URL=postgresql+asyncpg://postgres:your_postgres_password@localhost:5433
 # DATABASE_URL=postgresql+asyncpg://postgres:your_postgres_password@localhost:5432/academic_writing
 
 # OpenRouter LLM Configuration
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-DEFAULT_MODEL=deepseek/deepseek-chat
-FALLBACK_MODEL=deepseek/deepseek-r1
+OPENROUTER_API_KEY=[GCP_API_KEY]
+OPENROUTER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+DEFAULT_MODEL=gemini-2.5-flash
+FALLBACK_MODEL=gemini-flash-latest
 LLM_TIMEOUT_SECONDS=30.0
 
 # Security & JWT settings
@@ -368,7 +384,75 @@ DEFAULT_MODEL=deepseek/deepseek-chat
 
 ---
 
-## 8. Kiểm thử Hệ thống (Testing)
+## 8. Tính năng Multi-Agent Workspace Execution (Copilot Workspace Style)
+
+Hệ thống nâng cấp quy trình làm việc từ mô hình "gợi ý tĩnh" sang **Quy trình Thực thi Multi-Agent có Kế hoạch & Duyệt bản so sánh Diff** (tương tự trải nghiệm GitHub Copilot Workspace):
+
+```
+User Prompt ──► Planner (7 bước) ──► Multi-Agent Pipeline ──► Diff Viewer ──► Accept/Reject ──► Apply (Conflict-safe) ──► Undo
+```
+
+### 🔹 1. Quy trình 7 công đoạn (Multi-Agent Pipeline)
+
+| # | Công đoạn | Agent phụ trách | Mô tả chức năng |
+|---|---|---|---|
+| 1 | `inspect_context` | Context Inspector | Thu thập & tóm lược ngữ cảnh: đề tài, dàn ý, văn bản nháp, bài báo đã lưu trong thư viện. |
+| 2 | `build_outline` | `OutlineAgent` | Phân tích và bổ sung dàn ý phân cấp chuẩn học thuật (hoặc bảo lưu dàn ý hiện hữu). |
+| 3 | `research` | `LiteratureAgent` | Tìm kiếm bài báo khoa học từ Semantic Scholar, OpenAlex, arXiv qua kỹ thuật sinh truy vấn đa chiều. |
+| 4 | `extract_evidence` | `EvidenceAgent` | Trích xuất có cấu trúc: luận điểm (`claims`), dữ liệu thực nghiệm (`key_findings`), phương pháp (`methodology`) và ánh xạ vào các mục dàn ý. |
+| 5 | `compose` | `ComposeAgent` | Soạn thảo học thuật tổng hợp đa nguồn theo chuẩn trích dẫn APA 7, IEEE, hoặc BGD&ĐT. Tự động gắn cờ `[UNVERIFIED]` cho các luận cứ suy luận. |
+| 6 | `validate` | `ValidateAgent` | Thẩm định liêm chính học thuật: mật độ trích dẫn, đa dạng nguồn tài liệu, bám sát word budget và phát cảnh báo chất lượng. |
+| 7 | `build_proposal` | `ProposalService` | Tổng hợp kết quả thành bản đề xuất thay đổi Diff (`replace`, `insert`, `delete`) kèm cảnh báo và mã nguồn trích dẫn. |
+
+---
+
+### 🔹 2. Trải nghiệm Human-in-the-Loop & Trình duyệt Diff (DiffViewer)
+
+* **Bản so sánh Diff trực quan**:
+  * Các đoạn văn bản bị thay thế hoặc xóa bỏ hiển thị với nền đỏ gạch ngang (`—`).
+  * Nội dung mới do AI soạn thảo và tổng hợp hiển thị với nền xanh viền nhấn (`+`).
+  * Danh mục bài báo trích dẫn đi kèm từng đoạn văn bản.
+* **Quyền kiểm soát chi tiết (Granular Control)**:
+  * Cho phép người dùng duyệt (`Accept`) hoặc từ chối (`Reject`) từng thay đổi riêng lẻ, hoặc bấm *"Chấp nhận tất cả"* / *"Bỏ qua tất cả"*.
+* **Áp dụng an toàn (Conflict Detection)**:
+  * Nút **"Áp dụng vào tài liệu"** kiểm tra mã băm SHA-256 (`base_hash`) của tài liệu. Nếu nội dung trong editor bị chỉnh sửa song song trong lúc xem đề xuất, hệ thống sẽ cảnh báo xung đột phiên bản thay vì ghi đè mất dữ liệu.
+* **Hỗ trợ Hoàn tác (Undo Support)**:
+  * Sau khi áp dụng thành công, người dùng có thể bấm **"Hoàn tác (Undo)"** bất kỳ lúc nào để khôi phục chính xác phiên bản tài liệu trước đó (`DocumentVersion`).
+
+---
+
+### 🔹 3. Bảng điều khiển Trợ lý AI (`AIResponsePanel`)
+
+Giao diện cột phải của Workspace hỗ trợ 2 chế độ linh hoạt:
+1. **Quy trình Auto (Workspace Job)**:
+   * Nhập mục tiêu nhiệm vụ hoặc chọn mẫu tác vụ học thuật (Ví dụ: *"Soạn thảo Tổng quan nghiên cứu dựa trên 5 bài báo đã chọn"*).
+   * Cam kết Tuyên bố Liêm chính Học thuật (Academic Integrity Disclaimer).
+   * Stepper tiến độ `JobProgress` hiển thị thời gian thực từng bước, số token sử dụng và credit khấu trừ.
+   * Xem xét Diff, duyệt và áp dụng trực tiếp vào Tiptap Editor.
+   * **Tự động phục hồi trạng thái (Job Recovery)**: Khi F5 hoặc tải lại trang, hệ thống tự động kiểm tra `GET /agent-jobs/active` để khôi phục phiên tác vụ đang chạy hoặc đang chờ duyệt mà không bị mất tiến trình.
+2. **Hỏi đáp tương tác (Ask Mode)**:
+   * Hội thoại trực tiếp với AI Coach qua các lượt chat (`ChatMessage`).
+   * Các tác vụ phân tích nhanh: *Giải thích thuật ngữ*, *Tóm tắt ý chính*, *Viết lại học thuật*, *Phản biện luận cứ* (1 Credit / lượt).
+
+---
+
+### 🔹 4. Danh sách Canonical API Endpoints (`/api/v1/agent-jobs`)
+
+| Phương thức | Đường dẫn | Chức năng |
+|---|---|---|
+| `POST` | `/api/v1/agent-jobs` | Khởi tạo tác vụ (`mode="auto"` chạy quy trình hoặc `mode="ask"` phản hồi tức thì). |
+| `GET` | `/api/v1/agent-jobs/{job_id}` | Lấy trạng thái, tiến độ các stage, đề xuất proposals và credit/token tiêu hao. |
+| `GET` | `/api/v1/agent-jobs/active?project_id={id}` | Khôi phục tác vụ đang thực thi hoặc đang chờ duyệt của đề tài. |
+| `POST` | `/api/v1/agent-jobs/{job_id}/cancel` | Hủy tác vụ đang chạy và hoàn trả số dư credit chưa sử dụng. |
+| `POST` | `/api/v1/agent-jobs/{job_id}/proposals/{id}/decisions` | Gửi quyết định Accept / Reject cho từng thao tác diff. |
+| `POST` | `/api/v1/agent-jobs/{job_id}/apply` | Áp dụng các thay đổi được chấp thuận vào tài liệu (kiểm tra hash an toàn). |
+| `POST` | `/api/v1/agent-jobs/{job_id}/undo` | Hoàn tác thay đổi vừa áp dụng, đưa văn bản về phiên bản trước. |
+
+> **Lưu ý tương thích:** Các endpoint cũ (`/api/v1/agents/ask`, `/api/v1/agents/pipeline/*`) vẫn được duy trì để tương thích ngược và đã được đánh dấu `deprecated=True`.
+
+---
+
+## 9. Kiểm thử Hệ thống (Testing)
 
 ### 🔹 1. Chạy toàn bộ Test Backend (Pytest)
 Đảm bảo bạn đang ở thư mục `backend` và đã kích hoạt `venv`:
@@ -386,9 +470,8 @@ python -m agents.outline_agent
 1. Mở [http://localhost:3000/auth/signin](http://localhost:3000/auth/signin).
 2. Nhấn **"Đăng nhập bằng Google"** hoặc **"⚡ Đăng nhập nhanh (Chế độ Thử nghiệm)"**.
 3. Tại **Dashboard**, nhấn **"+ Tạo dự án mới"** $\rightarrow$ Nhập đề tài $\rightarrow$ Nhấn **"Bắt đầu dự án"**.
-4. Tại **Workspace**, nhấn **"✨ Sinh dàn ý AI"** để nhận dàn ý học thuật từ DeepSeek AI và chỉnh sửa trực tiếp trên cây Outline Editor.
+4. Tại **Workspace**, bạn có thể:
+   - Sử dụng **"✨ Sinh dàn ý AI"** để nhận dàn ý học thuật từ DeepSeek AI.
+   - Sử dụng tab **"Tài liệu"** để tìm kiếm và lưu các bài báo khoa học liên quan.
+   - Chuyển sang tab **"Trợ lý AI"** $\rightarrow$ Chọn **"Quy trình Auto (Workspace)"** để khởi chạy chuỗi Multi-Agent tự động soạn thảo, trích xuất dẫn chứng và duyệt thay đổi trực tiếp qua Diff Viewer.
 
-## Cập nhật Task 14 - Thúy Vi
-- Thiết kế UI Stepper Bar 3 bước (Dàn ý ➔ Tài liệu ➔ Viết & Trích dẫn).
-- Dựng Component `CreditBalance` trên Header và hộp thoại `PurchaseModal` (Mockup nạp tiền).
-- Xây dựng UI bảng `AIUseLog` hiển thị báo cáo lịch sử sử dụng AI.

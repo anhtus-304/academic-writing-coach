@@ -239,3 +239,42 @@
     widows: 2;
   }
 }
+
+/* ── Inline Diff / Track Changes ───────────────────────────────────── */
+.tiptap-editor ins,
+.tiptap-editor ins.diff-ins {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #064e3b !important;
+  text-decoration: none !important;
+  border-bottom: 2px solid #10b981 !important;
+  border-radius: 3px;
+  padding: 1px 3px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.tiptap-editor ins.diff-ins:hover {
+  background-color: rgba(16, 185, 129, 0.25) !important;
+  cursor: pointer;
+}
+
+.tiptap-editor del,
+.tiptap-editor del.diff-del {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  color: #991b1b !important;
+  text-decoration: line-through !important;
+  border-bottom: 2px solid #ef4444 !important;
+  opacity: 0.75;
+  border-radius: 3px;
+  padding: 1px 3px;
+  margin-right: 3px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.tiptap-editor del.diff-del:hover {
+  opacity: 1;
+  background-color: rgba(239, 68, 68, 0.22) !important;
+  cursor: pointer;
+}

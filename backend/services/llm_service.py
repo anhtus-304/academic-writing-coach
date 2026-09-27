@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import httpx
@@ -27,6 +28,66 @@ class LLMService:
         self.base_url = base_url or settings.OPENROUTER_BASE_URL
         self.default_model = default_model or settings.DEFAULT_MODEL
         self.temperature = temperature
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def get_client(self, timeout: float = 30.0) -> httpx.AsyncClient:
+        """Returns a shared, pooled AsyncClient for optimal TCP keep-alive and connection reuse."""
+        if self._client is None or self._client.is_closed:
+            limits = httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=60.0)
+            self._client = httpx.AsyncClient(limits=limits, timeout=timeout)
+        return self._client
+
+    async def close(self) -> None:
+        """Gracefully close the shared HTTP client."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    async def _post_with_retry(
+        self,
+        url: str,
+        headers: dict,
+        payload: dict,
+        timeout: float,
+        max_retries: int = 3,
+    ) -> httpx.Response:
+        """Execute HTTP POST with exponential backoff on 429 rate limit or transient 5xx errors."""
+        client = self.get_client(timeout)
+        last_exc: Optional[Exception] = None
+
+        for attempt in range(max_retries):
+            try:
+                response = await client.post(url, headers=headers, json=payload, timeout=timeout)
+
+                # Handle rate limiting (429) or transient gateway errors (502, 503, 504)
+                if response.status_code in (429, 502, 503, 504) and attempt < max_retries - 1:
+                    retry_after = response.headers.get("Retry-After")
+                    wait_time = float(retry_after) if retry_after and retry_after.isdigit() else (1.5 * (2 ** attempt))
+                    logger.warning(
+                        f"OpenRouter returned {response.status_code}. Backing off for {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})..."
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+
+                response.raise_for_status()
+                return response
+
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                last_exc = exc
+                if attempt < max_retries - 1:
+                    wait_time = 1.5 * (2 ** attempt)
+                    logger.warning(
+                        f"Network/timeout error calling OpenRouter ({exc}). Retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})..."
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
+            except httpx.HTTPStatusError as exc:
+                raise exc
+
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("OpenRouter request failed without response")
 
     async def generate_structured_output_with_usage(
         self,
@@ -41,7 +102,7 @@ class LLMService:
         selected_model = model or self.default_model or settings.DEFAULT_MODEL
         api_key = self.api_key or settings.OPENROUTER_API_KEY
         base_url = (self.base_url or settings.OPENROUTER_BASE_URL).rstrip("/")
-        timeout_val = timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT_SECONDS", 1.0)
+        timeout_val = timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT_SECONDS", 30.0)
 
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY is not set.")
@@ -75,19 +136,18 @@ class LLMService:
         }
 
         logger.info(f"Calling OpenRouter model '{selected_model}' (timeout={timeout_val}s)...")
-        
-        async with httpx.AsyncClient(timeout=timeout_val) as http_client:
-            response = await http_client.post(
-                f"{base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            res_data = response.json()
-            raw_content = res_data["choices"][0]["message"]["content"]
-            usage = res_data.get("usage", {})
-            parsed = self._clean_and_parse_json(raw_content, schema)
-            return parsed, usage
+
+        response = await self._post_with_retry(
+            f"{base_url}/chat/completions",
+            headers=headers,
+            payload=payload,
+            timeout=timeout_val,
+        )
+        res_data = response.json()
+        raw_content = res_data["choices"][0]["message"]["content"]
+        usage = res_data.get("usage", {})
+        parsed = self._clean_and_parse_json(raw_content, schema)
+        return parsed, usage
 
     async def generate_structured_output(
         self,
@@ -144,17 +204,16 @@ class LLMService:
 
         logger.info(f"Calling OpenRouter chat completion '{selected_model}' (timeout={timeout_val}s)...")
 
-        async with httpx.AsyncClient(timeout=timeout_val) as http_client:
-            response = await http_client.post(
-                f"{base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            res_data = response.json()
-            raw_content = res_data["choices"][0]["message"]["content"]
-            usage = res_data.get("usage", {})
-            return raw_content, usage
+        response = await self._post_with_retry(
+            f"{base_url}/chat/completions",
+            headers=headers,
+            payload=payload,
+            timeout=timeout_val,
+        )
+        res_data = response.json()
+        raw_content = res_data["choices"][0]["message"]["content"]
+        usage = res_data.get("usage", {})
+        return raw_content, usage
 
 
     def _clean_and_parse_json(self, raw_text: str, schema: Type[T]) -> T:

@@ -13,3 +13,5 @@ out/
 Thumbs.db 
 doc/
 _test_e2e.db
+.env.example
+.pytest_cache/

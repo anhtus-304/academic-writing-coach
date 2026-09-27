@@ -1,4 +1,5 @@
 import time
+import asyncio
 import logging
 from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -172,30 +173,39 @@ class LiteratureAgent(BaseAgent):
         primary_query = query_res.queries[0] if query_res.queries else topic
         search_res = await self.aggregator.aggregate_search(query=primary_query, limit=limit)
 
+        async def _summarize_single_paper(paper: PaperSchema) -> PaperSchema:
+            if not paper.abstract or len(paper.abstract.strip()) <= 30:
+                return paper
+            try:
+                summary_res = await self.summarize_paper(
+                    title=paper.title,
+                    abstract=paper.abstract,
+                    topic=topic,
+                    user_id=user_id,
+                    project_id=project_id,
+                    db=db,
+                )
+                return paper.model_copy(
+                    update={
+                        "summary_vi": summary_res.summary_vi,
+                        "relevance_score": summary_res.relevance_score,
+                    }
+                )
+            except Exception as err:
+                logger.error(f"Failed to summarize paper '{paper.title}': {err}")
+                return paper
+
+        # Concurrently summarize papers with asyncio.gather
+        tasks = [_summarize_single_paper(paper) for paper in search_res.papers]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
         summarized_papers: List[PaperSchema] = []
-        for paper in search_res.papers:
-            if paper.abstract and len(paper.abstract.strip()) > 30:
-                try:
-                    summary_res = await self.summarize_paper(
-                        title=paper.title,
-                        abstract=paper.abstract,
-                        topic=topic,
-                        user_id=user_id,
-                        project_id=project_id,
-                        db=db,
-                    )
-                    updated_paper = paper.model_copy(
-                        update={
-                            "summary_vi": summary_res.summary_vi,
-                            "relevance_score": summary_res.relevance_score,
-                        }
-                    )
-                    summarized_papers.append(updated_paper)
-                except Exception as err:
-                    logger.error(f"Failed to summarize paper '{paper.title}': {err}")
-                    summarized_papers.append(paper)
+        for idx, res in enumerate(results):
+            if isinstance(res, Exception):
+                logger.error(f"Summarization task failed for paper '{search_res.papers[idx].title}': {res}")
+                summarized_papers.append(search_res.papers[idx])
             else:
-                summarized_papers.append(paper)
+                summarized_papers.append(res)
 
         # Sort by relevance score
         summarized_papers.sort(key=lambda p: p.relevance_score or 0.0, reverse=True)
