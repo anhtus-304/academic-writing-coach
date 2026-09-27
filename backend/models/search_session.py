@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -17,7 +17,11 @@ elif "models.search_session" in sys.modules and __name__ == "backend.models.sear
 else:
     class SearchSession(Base):
         __tablename__ = "search_sessions"
-        __table_args__ = {"extend_existing": True}
+        # Composite index: the 48h cache lookup filters project + expires_at.
+        __table_args__ = (
+            Index("ix_search_sessions_project_id_expires_at", "project_id", "expires_at"),
+            {"extend_existing": True},
+        )
 
         id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 

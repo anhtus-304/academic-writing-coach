@@ -1,179 +1,396 @@
-# AI Academic Writing Coach — Backend README (Task 11 · Literature Agent & Interactive Text Editor)
+# AI Academic Writing Coach — Backend (cập nhật **Tuần 3**)
 
-Hướng dẫn nhóm phát triển **Task 11**: *Tìm kiếm tài liệu thật từ 3 nguồn API
-(Semantic Scholar, arXiv, OpenAlex), tóm tắt tiếng Việt, cache 48h, hệ thống credit,
-và bước nền cho Tiptap Editor với BubbleMenu "Hỏi AI"*.
+Hướng dẫn backend cho task tuần 3: **Citation Agent · LangGraph pipeline · DB Indexing ·
+Middleware (CORS + Rate limiting) · Unit/Integration testing**.
 
-> Tài liệu tham chiếu: **KẾ HOẠCH THỰC THI ĐỀ TÀI 2.docx** + **Phân Công Công Việc SPNC.docx**
-> (SPNC - Google Drive).
-
----
-
-## 1. Mục tiêu & yêu cầu task 11
-
-| # | Yêu cầu | Trạng thái (merged `agent-2`) |
-|---|---------|-------------------------------|
-| 1 | Thiết kế API endpoints tìm kiếm tài liệu & lưu cache (`search_sessions`, `cached_papers`) | 🟡 Route có nhưng **chưa được gắn vào `main.py`** |
-| 2 | Logic DB Cache 48h (tiết kiệm API Rate Limits) | ✅ Có (`expires_at` + kiểm tra lại) |
-| 3 | Credit Service API — `GET /credits/balance` + trừ credit khi gọi agent | 🟡 `GET /balance` có; **`deduct_credits` bị mất sau merge** |
-| 4 | Tìm tài liệu **thật** từ 3 nguồn (Semantic Scholar, arXiv, OpenAlex) | ✅ Các `services/*` có code thật |
-| 5 | Tóm tắt **tiếng Việt** bằng LLM | ✅ `services/llm_service.py` (OpenRouter) |
-| 6 | Tiptap Editor + BubbleMenu "Hỏi AI" | 🔴 FE chưa có (xem mục 7) |
-
-**Kết luận ngắn:** Phần **back-end core đã có code** (aggregator, 3 nguồn, LLM, cache),
-nhưng **chưa được tái kết nối** sau khi merge `agent-2` (thiếu schemas mới, `deduct_credits`,
-và router trong `main.py`). Xem mục **6 (Roadmap)** để hoàn thiện.
+> Tài liệu liên quan: `README.md` ở gốc repo (setup PostgreSQL/Docker + Google OAuth),
+> `KẾ HOẠCH THỰC THI ĐỀ TÀI` (Google Drive SPNC).
 
 ---
 
-## 2. API endpoints
+## 1. Thành phần & trạng thái
 
-### 2.1. Tìm kiếm tài liệu
-```
-POST /api/v1/projects/{project_id}/literature/search
-```
-Auth: **JWT Bearer** — chỉ chủ sở hữu project mới được dùng (kiểm tra `project.user_id`).
+| # | Hạng mục tuần 3 | File chính | Trạng thái |
+|---|---|---|---|
+| 1 | API Citation Agent (`check`, `format`, `bibliography`) | `api/routes/citation.py` | ✅ |
+| 2 | `CitationAgent` (rule-based core + LLM arbitrator, có fallback offline) | `agents/citation_agent.py` | ✅ |
+| 3 | LangGraph `Outline ➔ Literature ➔ Citation` + checkpoint | `agents/graph.py` | ✅ |
+| 4 | DB Indexing: GIN full-text + 3 composite index | `alembic/versions/f3a91c2d7b64_*.py`, `models/*` | ✅ |
+| 5 | Middleware CORS + Rate limiting | `api/middleware.py`, `main.py` | ✅ |
+| 6 | Unit/Integration tests + `conftest.py` | `tests/test_*` | ✅ (145 passed) |
 
-Body (`LiteratureSearchRequest`):
-```json
-{
-  "query": "deep learning",
-  "filters": { "source": "arxiv", "min_year": 2023 }
-}
-```
-- `query` (bắt buộc): chuỗi từ khóa.
-- `filters` (tùy chọn): `source` (`semantic_scholar` | `arxiv` | `openalex`) hoặc `min_year`.
-
-Response (`LiteratureSearchResponse`):
-```json
-{
-  "search_session_id": "uuid",
-  "cached": false,
-  "papers": [
-    { "id": "uuid", "title": "...", "authors": "...", "year": 2023,
-      "source": "arxiv", "doi": "...", "url": "...", "abstract": "...",
-      "summary": "...", "citation_count": 87, "relevance_score": 0.88 }
-  ]
-}
-```
-- `cached: false` = tìm mới (được trừ credit); `cached: true` = lấy từ cache (không trừ credit).
-
-### 2.2. Credit balance
-```
-GET /api/v1/credits/balance
-```
-Response: `{ "balance": <int> }`.
+Tech stack: Python 3.11+ (đã kiểm thử trên 3.14), FastAPI (async), SQLAlchemy 2.0 async +
+asyncpg, Alembic, Pydantic v2 / pydantic-settings, LangGraph 0.4, OpenRouter LLM, JWT (python-jose).
 
 ---
 
-## 3. Kiến trúc & file liên quan
+## 2. Cấu trúc thư mục (phần liên quan)
 
 ```
 backend/
-├── api/routes/
-│   ├── literature.py          # route POST .../literature/search (cần gắn vào main)
-│   ├── credits.py             # GET /credits/balance
-│   ├── auth.py / projects.py / health.py
+├── api/
+│   ├── middleware.py          # setup_cors() + setup_rate_limiting() (sliding window in-memory)
+│   ├── dependencies.py        # get_current_user (Bearer header hoặc cookie access_token)
+│   └── routes/                # auth, projects, credits, literature, agents, citation, health
+├── agents/
+│   ├── base_agent.py          # interface chung
+│   ├── outline_agent.py       # sinh dàn ý (LLM + fallback template)
+│   ├── literature_agent.py    # query expansion + tóm tắt tiếng Việt
+│   ├── citation_agent.py      # CitationAgent: detect_missing_citations / format_citations
+│   └── graph.py               # LangGraph StateGraph 3 node + checkpoint store
 ├── services/
-│   ├── literature_service.py  # search_literature + cache 48h + trừ credit
-│   ├── search_aggregator.py   # gọi 3 nguồn song song, dedup, relevance_score
-│   ├── scholar_service.py     # Semantic Scholar (+ retry khi rate-limit 429)
-│   ├── arxiv_service.py       # arXiv API (Atom/feedparser)
-│   ├── openalex_service.py    # OpenAlex (/works), dựng abstract từ inverted index
-│   ├── llm_service.py         # tóm tắt tiếng Việt qua OpenRouter
-│   └── credit_service.py      # get_credit_balance (+ nên có thêm deduct_credits)
-├── schemas/literature_schemas.py  # (cần cập nhật lại 3 schema mới)
-├── models/                    # User, Project, SearchSession, CachedPaper, CreditTransaction...
-└── alembic/versions/          # migration (cần cột expires_at, search_session_id, summary, relevance_score)
+│   ├── citation_formatter.py  # rule-based formatter (APA7 / IEEE / BGDĐT)
+│   ├── literature_service.py  # search + cache 48h + full_text_search_papers()
+│   ├── credit_service.py      # deduct_credits / get_credit_balance
+│   └── llm_service.py         # OpenRouter (structured output + text)
+├── data/citation_styles/      # apa7.py, ieee.py, bgddt.py
+├── models/                    # User, Project, Outline, SearchSession, CachedPaper,
+│                              # SelectedPaper, DraftDocument, CreditTransaction, AIUsageLog
+├── schemas/citation_schemas.py# request/response của Citation API
+├── alembic/versions/          # d40... (initial) ➔ 146032681bd8 ➔ b6c3d2a41f7e ➔ f3a91c2d7b64 (head)
+└── tests/                     # pytest + httpx.AsyncClient + SQLite tạm
 ```
+
 ---
 
-## 4. Cài đặt & chạy
+## 3. Cài đặt & chạy
 
-### 4.1. Yêu cầu
-- Python 3.14
-- PostgreSQL (đang chạy trên cổng 5432)
-- Biến môi trường trong `backend/.env` (xem `backend/.env.example`):
-  - `DATABASE_URL`, `JWT_SECRET`, `GOOGLE_*`
-  - LLM: `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `DEFAULT_MODEL`
-  - 3 nguồn: `SEMANTIC_SCHOLAR_SEARCH_URL`, `ARXIV_API_URL`, `OPENALEX_WORKS_URL`
-  - CORS: `BACKEND_CORS_ORIGINS`
-
-### 4.2. Cài deps & migration
 ```bash
 cd backend
+python -m venv .venv
+# Windows: .venv\Scripts\activate   |  macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-alembic upgrade head            # cần DB chạy
+
+cp .env.example .env        # rồi điền giá trị thật
+alembic upgrade head        # tạo bảng + index (cần PostgreSQL đang chạy)
+uvicorn main:app --reload   # http://127.0.0.1:8000/docs
 ```
 
-### 4.3. Chạy server
+### Biến môi trường mới của tuần 3 (`backend/.env`)
+
+```env
+# CORS: danh sách origin của frontend (JSON array)
+BACKEND_CORS_ORIGINS=["http://localhost:3000"]
+# Cho phép thêm domain deploy Vercel (*.vercel.app, cả production + preview)
+BACKEND_CORS_ORIGIN_REGEX=https://([a-z0-9-]+\.)*vercel\.app
+
+# Rate limiting (sliding window in-memory, key theo bearer token hoặc IP)
+RATE_LIMIT_ENABLED=True
+RATE_LIMIT_REQUESTS=60           # tối đa 60 request / cửa sổ (tuần 3) -> vượt trả 429
+RATE_LIMIT_WINDOW_SECONDS=60     # độ dài cửa sổ (giây)
+```
+
+`LITERATURE_MODE=mock` giúp chạy test offline (không gọi API ngoài); `real`/`auto` dùng API thật.
+
+---
+
+## 4. Database & Migration
+
+### Chuỗi revision (đã nối liền, head = tuần 3)
+
+```
+d2413c130acf (initial schema) ➔ 146032681bd8 (literature + draft tables)
+➔ b6c3d2a41f7e (literature search columns) ➔ f3a91c2d7b64 (week-3 indexes)  ← head
+```
+
+Kiểm tra nhanh:
+```bash
+alembic heads          # f3a91c2d7b64
+alembic history
+alembic upgrade head                                  # áp dụng thật
+alembic upgrade b6c3d2a41f7e:f3a91c2d7b64 --sql       # xem SQL sẽ chạy (offline)
+```
+
+### Index được thêm ở tuần 3
+
+| Index | Bảng | Loại | Phục vụ truy vấn |
+|---|---|---|---|
+| `ix_cached_papers_fts` | `cached_papers` | **GIN** `to_tsvector('simple', title \|\| ' ' \|\| abstract)` | full-text search trên cache tài liệu |
+| `ix_projects_user_id_status` | `projects` | composite | dashboard: `WHERE user_id=? [AND status=?]` |
+| `ix_search_sessions_project_id_expires_at` | `search_sessions` | composite | cache 48h: `project_id + expires_at > now()` |
+| `ix_credit_transactions_user_id_created_at` | `credit_transactions` | composite | lịch sử credit (mới nhất trước) |
+
+Ghi chú kỹ thuật:
+- Dùng cấu hình `simple` (không stemming) vì corpus trộn tiếng Việt + tiếng Anh.
+- GIN index chỉ tạo trên PostgreSQL (`dialect == "postgresql"`); migration dùng `IF NOT EXISTS`
+  nên chạy lại an toàn (kể cả khi bảng đã có index do `Base.metadata.create_all`).
+- `services/literature_service.full_text_search_papers(db, query, limit)` tự chọn
+  `to_tsvector`/`plainto_tsquery` (PostgreSQL) hoặc fallback `ILIKE` (SQLite khi test).
+- Kiểm tra index sau khi migrate:
+  ```sql
+  SELECT indexname, indexdef FROM pg_indexes
+  WHERE tablename IN ('cached_papers','projects','search_sessions','credit_transactions');
+  ```
+  Và đo thời gian truy vấn: `EXPLAIN (ANALYZE, BUFFERS) SELECT ... WHERE project_id=$1 AND expires_at > now();`
+  (mục tiêu < 50ms với dữ liệu lớn — test `tests/test_db_indexing.py` có smoke-check).
+---
+
+## 5. API endpoints
+
+Tất cả endpoint (trừ `/health`, `/auth/google/*`, `/auth/dev-login`) cần header
+`Authorization: Bearer <jwt>` **hoặc** cookie `access_token` (do `/auth/dev-login` set).
+Mọi endpoint theo `project_id` đều kiểm tra quyền sở hữu → `404` nếu project không thuộc user.
+
+| Nhóm | Endpoint | Ghi chú |
+|---|---|---|
+| Auth | `GET /auth/google/login`, `GET /auth/google/callback`, `POST /auth/dev-login`, `POST /auth/logout`, `GET /auth/me` | dev-login tạo/đăng nhập nhanh, tặng 120 credits, set cookie HttpOnly |
+| Projects | `POST /projects/`, `GET /projects/`, `GET/PUT/DELETE /projects/{id}` | CRUD + phân trang |
+| Outline | `POST /projects/{id}/outline/generate`, `GET/PUT /projects/{id}/outline` | trừ credit khi generate |
+| Document | `GET/PUT /projects/{id}/document`, `POST /projects/{id}/export/docx`, `POST /projects/{id}/export/markdown`, `POST /projects/{id}/import/*` | lưu draft + import/export |
+| Credits | `GET /credits/balance`, `GET /credits/logs`, `GET /credits/transactions` | |
+| Literature | `POST /projects/{id}/literature/search`, `POST /projects/{id}/literature/select`, `GET .../selected`, `DELETE .../selected/{id}`, `GET .../recent-search`, `GET /literature/search`, `POST /literature/summarize` | search mới trừ 1 credit, cache 48h không trừ |
+| Agents | `POST /agents/ask` | trợ lý AI theo đoạn bôi đen (trừ 1 credit) |
+| **Citation** | `POST /projects/{id}/citation/check`, `POST /projects/{id}/citation/format`, `POST /projects/{id}/citation/bibliography`, `POST /citation/format` | xem mục 6 |
+| Health | `GET /health` | public, được miễn rate limit |
+
+---
+
+## 6. Citation API (tuần 3)
+
+Hai endpoint chính: **check** (tìm câu thiếu trích dẫn) và **format** (sinh in-text + danh mục
+tài liệu tham khảo). Ngoài ra có 2 endpoint phụ ở mục 6.3.
+
+### 6.1 `POST /api/v1/projects/{project_id}/citation/check` — trừ **2 credits**
+
+Phát hiện câu/nhận định cần nguồn nhưng **thiếu trích dẫn** bằng **regex + rule-based**
+(whitelist câu thuộc về chính tác giả như "chúng tôi", "in this study"; LLM arbitrator là
+tuỳ chọn và luôn có fallback deterministic khi LLM lỗi/timeout).
+
+Request:
+```json
+{
+  "content": "<p>The survey reports that 85% of students use AI writing tools.</p>",
+  "citation_style": "apa7",
+  "paper_ids": ["<SelectedPaper.id>"]
+}
+```
+- `content`: plain text hoặc HTML (bắt buộc, tối thiểu 10 ký tự).
+- `citation_style`: `apa7` | `ieee` | `bgddt` (bỏ trống → dùng `project.citation_style`).
+- `paper_ids`: tuỳ chọn — giới hạn danh mục tài liệu đối chiếu; bỏ trống = toàn bộ tài liệu đã chọn của project.
+
+Response (rút gọn):
+```json
+{
+  "total_missing": 1,
+  "missing": [
+    {
+      "text": "The survey reports that 85% of students use AI writing tools.",
+      "index": 0,
+      "suggestion": "Bổ sung nguồn trích dẫn cho nhận định này."
+    }
+  ],
+  "total_issues": 1,
+  "missing_claims": [
+    {
+      "sentence": "The survey reports that 85% of students use AI writing tools.",
+      "reason": "Chứa dữ liệu số liệu định lượng ...",
+      "suggested_action": "Bổ sung trích dẫn tài liệu tham khảo ...",
+      "recommended_paper_id": null,
+      "recommended_paper_title": null,
+      "in_text_suggestion": null,
+      "sentence_index": 0,
+      "char_offset": 3,
+      "char_end": 66
+    }
+  ],
+  "invalid_citations": [],
+  "citation_warnings": [],
+  "uncited_papers": [],
+  "verified_count": 0,
+  "credits_charged": 2
+}
+```
+- `missing[]`: contract rút gọn `{text, index, suggestion}` (`total_missing` = số câu thiếu nguồn).
+- `missing_claims[]`: bản đầy đủ cho Tiptap — kèm `reason`, `suggested_action`,
+  `recommended_paper_*` và **offset highlight** `sentence_index` / `char_offset` / `char_end`.
+- `invalid_citations[]`: ghost citation (ví dụ `[7]` nhưng danh mục chỉ có 2 tài liệu).
+- `uncited_papers[]`: tài liệu đã chọn nhưng chưa được trích dẫn (kèm `in_text_code` gợi ý).
+- Lỗi: `402` khi không đủ credit, `401` khi chưa đăng nhập, `404` khi sai project (không sở hữu).
+
+### 6.2 `POST /api/v1/projects/{project_id}/citation/format` (không trừ credit)
+
+Request (tất cả optional):
+```json
+{ "paper_ids": ["<SelectedPaper.id>"], "style": "ieee", "include_in_text": true }
+```
+- `paper_ids` (alias cũ: `selected_paper_ids`): chỉ format một tập con; bỏ trống = toàn bộ tài liệu đã chọn.
+- `style`: `apa7` | `ieee` | `bgddt`; bỏ trống → `project.citation_style`.
+- `include_in_text=false`: bỏ trường `in_text_citation` trong từng entry.
+
+Response:
+```json
+{
+  "project_id": "3f1c...",
+  "style": "ieee",
+  "total_citations": 1,
+  "citations": [
+    {
+      "selected_paper_id": "9a2b...",
+      "paper_id": "c7d4...",
+      "title": "Deep Learning for Academic Writing",
+      "authors": ["Nguyen Van An"],
+      "year": 2023,
+      "in_text_citation": "[1]",
+      "full_citation": "[1] N. V. An, \"Deep Learning for Academic Writing,\" 2023.",
+      "style": "ieee"
+    }
+  ],
+  "bibliography": ["[1] N. V. An, \"Deep Learning for Academic Writing,\" 2023."],
+  "bibliography_text": "[1] N. V. An, \"Deep Learning for Academic Writing,\" 2023.",
+  "html_formatted": "<ol class='bibliography-list'><li>...</li></ol>"
+}
+```
+- `bibliography[]`: đã sắp xếp theo luật từng style (APA7 A→Z theo họ tác giả, IEEE/BGDĐT theo số thứ tự).
+- `bibliography_text`: bản nối các entry bằng `\n` (tiện chèn/copy vào bản thảo).
+- `html_formatted`: `<ol>` cho IEEE/BGDĐT, `<div>` cho APA7.
+
+### 6.3 Các endpoint phụ
+- `POST /projects/{id}/citation/bibliography?style=apa7` → chỉ trả `bibliography`, `bibliography_text`, `html_formatted`.
+- `POST /api/v1/citation/format` → format 1 nguồn từ metadata (`title`, `authors`, `year`, ...),
+  dùng cho preview nhanh ở FE.
+
+
+---
+
+## 7. Citation Agent & LangGraph pipeline
+
+### 7.1 `CitationAgent` (`agents/citation_agent.py`)
+- **Deterministic core** (không tốn token): tách câu an toàn với viết tắt (`et al.`, `TS.`, `pp.`…),
+  regex nhận diện in-text APA (`(Nguyen, 2023)`, `Smith (2024)`) và IEEE (`[1, 2]`, `[1-3]`),
+  phát hiện ghost citation, kiểm tra năm xuất bản, liệt kê paper chưa trích dẫn,
+  heuristic lọc câu cần dẫn chứng (số liệu `%`, "theo nghiên cứu", "studies show"…)
+  và whitelist câu thuộc về chính tác giả ("chúng tôi", "in this study"…).
+- **LLM arbitrator** (tuỳ chọn): lọc câu không cần trích dẫn + gợi ý paper phù hợp nhất;
+  nếu LLM lỗi/timeout → tự động fallback về kết quả deterministic (test chạy offline được).
+- Public API: `detect_missing(text, papers)` → `[{text, index, suggestion}]` (kèm `reason` và
+  offset highlight), `detect_missing_citations(text, papers)`, `format_citations(papers, style)`,
+  `format_citations_detailed(papers, style)`, `check_document_citations(content, selected_papers, citation_style)`.
+
+### 7.2 LangGraph (`agents/graph.py`)
+```
+generate_outline ──(ok)──► search_literature ──(ok)──► check_citations ──► END
+        │                        │                          │
+        └───(error)──► END       └───(error)──► END          └── ghi citation_check, citations, bibliography
+```
+- `AgentState` (TypedDict) mang input (`topic`, `document_type`, `draft_content`, `citation_style`,
+  `selected_papers`, `skip_literature`…) và output (`outline`, `literature_review`, `citation_check`,
+  `citations`, `bibliography`, `steps_completed`, `status`, `error`).
+- Mỗi node trả về **partial state**; `_route_unless_failed()` dừng pipeline ngay khi có `error`.
+- Checkpoint: `PipelineCheckpointStore` (in-memory, trả `checkpoints[]` trong kết quả) và
+  `MemorySaver` của LangGraph (chạy lại với `resume=True` + `thread_id`).
+- **Fallback khi chưa cài `langgraph`**: `build_academic_writing_graph()` tự trả về `DictGraphMock`
+  (dict mock) — chạy 3 node tuần tự trên state `dict`, dừng ngay khi có `error`, hỗ trợ
+  `get_graph()`, `ainvoke()`, `aget_state()`, `aget_state_history()`; nhờ cùng contract nên
+  `run_academic_pipeline()` và test không cần đổi.
+- Chạy độc lập (offline, `LITERATURE_MODE=mock`):
+```python
+import asyncio
+from agents.graph import run_academic_pipeline
+
+state = asyncio.run(run_academic_pipeline(
+    {"topic": "AI trong viết học thuật", "draft_content": "<p>...</p>", "citation_style": "apa7"},
+    run_id="demo-run",
+))
+print(state["status"], state["steps_completed"], len(state["bibliography"]))
+```
+---
+
+## 8. Middleware: CORS & Rate limiting (`api/middleware.py`)
+
+`main.py` gọi:
+```python
+setup_rate_limiting(app)   # thêm trước → là lớp trong
+setup_cors(app)            # thêm sau  → là lớp ngoài cùng (429 vẫn có CORS header)
+```
+- **CORS**: `allow_origins` = `BACKEND_CORS_ORIGINS` (mặc định `http://localhost:3000`,
+  `http://127.0.0.1:3000`) + `allow_origin_regex` = `BACKEND_CORS_ORIGIN_REGEX` (mặc định
+  `https://([a-z0-9-]+\.)*vercel\.app` → chấp nhận mọi domain Vercel production/preview),
+  `allow_credentials=True`, expose `X-RateLimit-*` + `Retry-After`.
+- **Rate limiting** (`RateLimitMiddleware`): sliding window in-memory, **mặc định 60 request / 60 giây**
+  (`RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`), key =
+  `token:<sha256(bearer)>` nếu có header `Authorization`, ngược lại `ip:<x-forwarded-for đầu tiên | client host>`.
+  Bỏ qua `OPTIONS` (preflight), `/api/v1/health`, `/docs`, `/redoc`, `/openapi.json`.
+  Vượt hạn mức → `429` với body `{detail, limit, window_seconds, retry_after}` + header
+  `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`.
+- Dev không cần Redis; khi triển khai production có thể thay `RateLimitMiddleware` bằng backend
+  Redis/`slowapi` mà không phải sửa route.
+
+---
+
+## 9. Testing
+
+### 9.1 Chạy test (offline, không cần PostgreSQL)
 ```bash
 cd backend
-uvicorn main:app --reload
+pip install -r requirements.txt        # đã gồm aiosqlite cho DB test
+python -m pytest tests/ -q             # toàn bộ suite
+python -m pytest tests/test_citation_api.py -q
+python -m pytest -k "citation or langgraph or indexing or rate_limit" -q
 ```
-Swagger: http://127.0.0.1:8000/docs
+Kết quả hiện tại (SQLite tạm `_test_week3.db` được tạo mới mỗi session, `LITERATURE_MODE=mock`, LLM bị stub):
+**145 passed** — chạy lại nhiều lần cho kết quả như nhau.
 
----
+### 9.2 Fixtures dùng chung (`tests/conftest.py`)
+| Fixture | Ý nghĩa |
+|---|---|
+| `client` | `httpx.AsyncClient` + `ASGITransport` gọi thẳng app FastAPI (không cần socket) |
+| `db_session` | `AsyncSession` để seed/kiểm tra DB trực tiếp |
+| `test_user` | user đã lưu DB (mặc định 20 credits) |
+| `token` / `auth_headers` | JWT + header `Authorization: Bearer ...` |
+| `project` | project thuộc `test_user` |
 
-## 5. Test
+Helper: `create_user_with_project()`, `create_cached_paper()`, `ensure_schema()`, `unique_email()`.
 
-### 5.1. Test tự động (offline, không cần PostgreSQL)
-Chạy trên SQLite tạm; `LITERATURE_MODE=mock` để deterministic (qua `tests/conftest.py`):
+### 9.3 Test của tuần 3
+| File | Nội dung |
+|---|---|
+| `test_citation_api.py` | `/citation/check` (offset highlight, ghost citation, uncited papers, trừ 2 credit, 402/401/404, contract rút gọn `missing`/`total_missing`, lọc `paper_ids`), `/citation/format` (APA7/IEEE/BGDĐT, subset, alias `paper_ids`, `bibliography_text`, fallback style project), `/citation/format` standalone, contract `detect_missing`/`detect_missing_citations`/`format_citations` |
+| `test_langgraph_pipeline.py` | 3 node, thứ tự `steps_completed`, dừng khi lỗi, `skip_literature`, checkpoint in-memory + `MemorySaver`, resume, **dict mock fallback** (`build_dict_graph`) |
+| `test_db_indexing.py` | Index khai báo trên model, migration GIN + revision chain, index tồn tại trong DB, smoke hiệu năng, credit history index |
+| `test_middleware_rate_limit.py` | 429 sau hạn mức, exempt path/preflight, key theo token, CORS header trên 429, tắt limiter, **mặc định 60 req/phút**, **CORS cho `*.vercel.app`** |
+| `test_literature_api.py` | search + trừ 1 credit, cache 48h (không trừ thêm), cache hết hạn, filter source, 402/401/404, select/list/delete, recent-search, `full_text_search_papers` |
+| `test_projects_api.py`, `test_auth.py` | CRUD project, phân trang, quyền sở hữu; dev-login/JWT/cookie/logout |
+
+### 9.4 Test tay nhanh
 ```bash
-cd backend
-pip install aiosqlite greenlet pytest pytest-asyncio
-python -m pytest tests/ -q
+# 1. Lấy token
+curl -X POST http://127.0.0.1:8000/api/v1/auth/dev-login \
+  -H "Content-Type: application/json" -d '{"email":"demo@student.edu.vn","name":"Demo"}'
+# 2. Tạo project rồi gọi citation/check, citation/format như mục 6
 ```
-Các file test hiện có:
-- `tests/test_search_sources.py` — unit test aggregator (dedup, scoring, filter).
-- `tests/test_literature_credits_e2e.py` — e2e: health, balance, search + cache + trừ credit, 401/402/404.
-- `tests/test_search_aggregator.py`, `tests/test_auth_and_projects.py` — test từ agent-2.
-
-> ⚠️ Sau khi merge, nếu import bị lỗi (thiếu schema/deduct_credits) thì test literature
-> sẽ không chạy được cho tới khi hoàn tất mục **6**.
-
-### 5.2. Test tay bằng curl
-```bash
-export TOKEN="<jwt>"
-curl -X GET  http://127.0.0.1:8000/api/v1/credits/balance -H "Authorization: Bearer $TOKEN"
-curl -X POST http://127.0.0.1:8000/api/v1/projects/{PROJECT_ID}/literature/search \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"query":"academic writing","filters":{"min_year":2022}}'
-```
-Gọi lại lần hai cùng query → nhận `"cached": true`, không trừ thêm credit.
+Kiểm tra rate limit: gọi liên tục > `RATE_LIMIT_REQUESTS` request trong 60s → nhận `429`.
 
 ---
 
-## 6. Roadmap — việc cần làm để hoàn thiện task 11
+## 10. Ghi chú triển khai & việc tiếp theo
 
-> Trạng thái sau khi merge `agent-2` ("Merge agent-2 code, drop local changes"):
-> một số file bị reset về bản của `agent-2`, làm mất phần **tái kết nối** literature.
-> Cần tái áp dụng các điểm sau:
-
-1. **`schemas/literature_schemas.py`** — khôi phục 3 schema: `LiteratureSearchRequest`,
-   `PaperResponse`, `LiteratureSearchResponse` (bản `agent-2` chỉ còn schema cũ).
-2. **`services/credit_service.py`** — khôi phục `deduct_credits(db, user, amount, description)`
-   (check số dư → trừ `credit_balance` → ghi `CreditTransaction` type=`usage`, amount âm → `True/False`).
-   `literature_service.py` đang import hàm này.
-3. **`api/routes/literature.py`** — sau khi có schema, import `LiteratureSearchRequest/Response`
-   sẽ hoạt động trở lại.
-4. **`main.py`** — đăng ký router literature:
-   ```python
-   from api.routes import auth, projects, credits, health, literature
-   app.include_router(literature.router, prefix=settings.API_V1_STR)
-   ```
-5. **Migration** — đảm bảo DB có cột `search_sessions.expires_at`,
-   `cached_papers.search_session_id/summary/relevance_score` (tạo/re-apply migration phù hợp).
-6. **Chạy lại test** — `python -m pytest tests/ -q` tới khi xanh.
-7. **FE (Task 15/editor)** — Tiptap Editor + BubbleMenu "Hỏi AI": tiêu thụ API này.
-   `frontend/src/components/editor/` (TiptapEditor, AIBubbleMenu, AIResponsePanel) đang cần phát triển.
+- **Dual import alias**: backend có thể được import theo 2 kiểu (`agents.x` khi chạy
+  `uvicorn main:app` trong `backend/`, hoặc `backend.agents.x` khi chạy từ gốc repo). Các model
+  và `database.py` đã tự đồng bộ `sys.modules`; route/service ưu tiên alias `backend.*`, và
+  pipeline (`agents/graph.py`) cũng resolve node theo alias này — vì vậy khi viết test có
+  `monkeypatch` agent/service nên import/patch theo `backend.*`.
+- **Cache tài liệu**: mỗi `SearchSession` sở hữu tập `CachedPaper` riêng (row gắn `session_id`);
+  paper trùng DOI ở session cũ sẽ được copy (kế thừa `summary`) để `cached: true` và
+  `/recent-search` luôn trả đủ danh sách.
+- **Chi phí credit**: literature search mới = 1, citation check = 2, `/agents/ask` = 1;
+  các thao tác đọc (bibliography, format, recent-search) không trừ credit.
+- **Việc tiếp theo (week 4)**:
+  - Chạy `alembic upgrade head` + test trên PostgreSQL thật (test hiện dùng SQLite, nên nhánh GIN
+    chỉ được xác minh qua SQL offline `alembic upgrade b6c3d2a41f7e:f3a91c2d7b64 --sql`).
+  - Chuyển `PipelineCheckpointStore` sang Redis nếu cần resume pipeline giữa nhiều worker.
+  - Rate limit theo *plan* (free/pro) và thêm header `X-RateLimit-Reset`.
+  - Bổ sung test cho `POST /agents/ask` và luồng import/export DOCX/Markdown.
 
 ---
 
-## 7. Ghi chú triển khai
+## 11. Sự cố thường gặp (đã gặp khi verify tuần 3)
 
-- **Semantic Scholar** công khai hay **rate-limit 429** → service đã retry ngắn trước khi bỏ cuộc.
-- **arXiv** phải dùng `https://export.arxiv.org` (HTTP bị redirect 301).
-- **OpenAlex** lưu abstract dạng **inverted index** → cần dựng lại chuỗi abstract.
-- **LLM tóm tắt**: nếu chưa có key, `summary` để trống, không làm hỏng tìm kiếm.
-- **Credit**: nếu hết credit khi tìm kiếm mới → trả `402 Payment Required`.
+| Lỗi | Nguyên nhân | Cách xử lý |
+|---|---|---|
+| `alembic upgrade head` → `pydantic_core.ValidationError: 23 validation errors for Settings` (`PROJECT_NAME`, `DATABASE_URL`, `JWT_SECRET`, ... `Field required`) | chưa có `backend/.env`; `config.Settings()` là bắt buộc nên Alembic (`env.py` import `config`) không nạp được | `cp backend/.env.example backend/.env` rồi điền giá trị thật (password PostgreSQL, JWT secret…). Không commit `.env`. |
+| `alembic upgrade head` → `NotImplementedError: No support for ALTER of constraints in SQLite dialect` (ở revision `b6c3d2a41f7e`) | chuỗi migration viết cho **PostgreSQL** (`op.create_foreign_key`), SQLite không hỗ trợ ALTER constraint | dùng PostgreSQL thật (`DATABASE_URL=postgresql+asyncpg://...`); muốn kiểm tra SQL mà không cần DB: `alembic upgrade b6c3d2a41f7e:f3a91c2d7b64 --sql` |
+| pytest lần 2 báo `UNIQUE constraint failed: users.email` | file SQLite tạm `_test_week3.db` còn dữ liệu của lần chạy trước | đã fix trong `tests/conftest.py` (xoá DB tạm ở đầu mỗi session) — chỉ cần chạy lại; hoặc xoá tay `backend/_test_week3.db` |
+| `python -m ruff check ...` → `No module named ruff` | `ruff` chỉ nằm trong `requirements.txt` (dev tool), chưa cài | `pip install ruff` (hoặc bỏ qua, không ảnh hưởng runtime/test) |
+
+
+

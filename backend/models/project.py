@@ -1,6 +1,8 @@
 import sys
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey
+import uuid
+
+from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, synonym
 
@@ -9,8 +11,6 @@ try:
 except ImportError:
     from database import Base
 
-import uuid
-
 if "backend.models.project" in sys.modules and __name__ == "models.project":
     Project = sys.modules["backend.models.project"].Project
 elif "models.project" in sys.modules and __name__ == "backend.models.project":
@@ -18,7 +18,11 @@ elif "models.project" in sys.modules and __name__ == "backend.models.project":
 else:
     class Project(Base):
         __tablename__ = "projects"
-        __table_args__ = {"extend_existing": True}
+        # Composite index: every dashboard query filters by owner + status.
+        __table_args__ = (
+            Index("ix_projects_user_id_status", "user_id", "status"),
+            {"extend_existing": True},
+        )
 
         id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
@@ -42,6 +46,3 @@ else:
         draft_documents = relationship("DraftDocument", back_populates="project", cascade="all, delete-orphan")
         agent_jobs = relationship("AgentJob", backref="project", cascade="all, delete-orphan")
         document_versions = relationship("DocumentVersion", backref="project", cascade="all, delete-orphan")
-
-
-

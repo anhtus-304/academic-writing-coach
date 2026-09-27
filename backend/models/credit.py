@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Enum, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, synonym
 
@@ -17,7 +17,11 @@ elif "models.credit" in sys.modules and __name__ == "backend.models.credit":
 else:
     class CreditTransaction(Base):
         __tablename__ = "credit_transactions"
-        __table_args__ = {"extend_existing": True}
+        # Composite index: credit history is always read as user + newest first.
+        __table_args__ = (
+            Index("ix_credit_transactions_user_id_created_at", "user_id", "created_at"),
+            {"extend_existing": True},
+        )
 
         id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 

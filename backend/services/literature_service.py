@@ -8,7 +8,7 @@ from xml.etree import ElementTree as ET
 import httpx
 from fastapi import HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 try:
@@ -305,7 +305,11 @@ def _apply_filters(
 
 
 async def _existing_by_doi(db: AsyncSession, papers: list[dict[str, Any]]) -> dict[str, CachedPaper]:
-    """Return a map doi -> CachedPaper for any paper with a non-empty doi."""
+    """Return a map doi -> CachedPaper for any paper with a non-empty doi.
+
+    Used by :func:`search_project_literature` to avoid re-summarizing a paper
+    that was already cached by an earlier search session.
+    """
     dois = [p["doi"] for p in papers if p.get("doi")]
     if not dois:
         return {}
@@ -344,6 +348,68 @@ async def _fetch_source_papers(
 
     mock_filtered = _apply_filters(MOCK_PAPERS, filters)
     return mock_filtered
+
+
+async def fetch_candidate_papers(
+    query: str,
+    limit: int = 5,
+    filters: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
+    """Public, cache-free paper fetcher used by the LangGraph literature node.
+
+    Honours ``settings.LITERATURE_MODE`` through :func:`_fetch_source_papers`:
+    ``mock`` returns the deterministic offline corpus (used by unit tests) while
+    ``real``/``auto`` query the live APIs.
+    """
+    if not query or not query.strip():
+        return []
+
+    papers = await _fetch_source_papers(query.strip(), filters)
+    if limit and limit > 0:
+        return list(papers)[:limit]
+    return list(papers)
+
+
+async def full_text_search_papers(
+    db: AsyncSession,
+    query: str,
+    limit: int = 20,
+) -> list[CachedPaper]:
+    """Full-text search over ``cached_papers.title + abstract``.
+
+    On PostgreSQL this uses the GIN index created by migration
+    ``f3a91c2d7b64`` (``to_tsvector('simple', title || ' ' || abstract)``), which
+    keeps lookups in the sub-50ms range once the literature cache grows. Other
+    dialects (SQLite in tests) transparently fall back to a portable ``ILIKE``
+    scan so the same code path remains testable offline.
+    """
+    term = (query or "").strip()
+    stmt = select(CachedPaper)
+
+    try:
+        dialect = db.get_bind().dialect.name
+    except Exception:  # pragma: no cover - defensive
+        dialect = ""
+
+    if term:
+        if dialect == "postgresql":
+            document = func.to_tsvector(
+                "simple",
+                func.coalesce(CachedPaper.title, "") + " " + func.coalesce(CachedPaper.abstract, ""),
+            )
+            stmt = stmt.where(document.op("@@")(func.plainto_tsquery("simple", term)))
+        else:
+            pattern = f"%{term}%"
+            stmt = stmt.where(
+                or_(
+                    CachedPaper.title.ilike(pattern),
+                    CachedPaper.abstract.ilike(pattern),
+                )
+            )
+
+    stmt = stmt.order_by(CachedPaper.relevance_score.desc()).limit(limit)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def _summarize_papers(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -673,31 +739,42 @@ async def search_project_literature(
     db.add(new_session)
     await db.flush()
 
-    # 5. Persist papers, reusing any already-cached paper by doi
-    by_doi = await _existing_by_doi(db, raw_papers)
+    # 5. Persist papers. A CachedPaper row belongs to exactly one SearchSession,
+    #    therefore every session must own a self-contained result set - the
+    #    cache-hit path and ``/literature/recent-search`` both read papers by
+    #    ``session_id``. Papers already cached by a *previous* session are copied
+    #    (reusing their Vietnamese summary so no second LLM call is needed),
+    #    while duplicates inside this same batch reuse the row just created.
+    known_by_doi = await _existing_by_doi(db, raw_papers)
     stored_papers: list[CachedPaper] = []
     for item in raw_papers:
-        if item.get("doi") and item["doi"] in by_doi:
-            returned = by_doi[item["doi"]]
-        else:
-            paper = CachedPaper(
-                session_id=new_session.id,
-                title=item.get("title") or "Untitled",
-                authors=item.get("authors"),
-                abstract=item.get("abstract"),
-                doi=item.get("doi"),
-                url=item.get("url"),
-                source=item.get("source"),
-                year=item.get("publication_year") or item.get("year"),
-                citation_count=item.get("citation_count") or 0,
-                summary=item.get("summary"),
-                relevance_score=item.get("relevance_score") or 0.0,
-            )
-            db.add(paper)
-            if item.get("doi"):
-                by_doi[item["doi"]] = paper
-            returned = paper
-        stored_papers.append(returned)
+        doi = item.get("doi")
+        existing = known_by_doi.get(doi) if doi else None
+        if existing is not None and existing.session_id == new_session.id:
+            stored_papers.append(existing)
+            continue
+
+        paper = CachedPaper(
+            session_id=new_session.id,
+            title=item.get("title") or "Untitled",
+            authors=item.get("authors"),
+            abstract=item.get("abstract"),
+            doi=doi,
+            url=item.get("url") or (existing.url if existing else None),
+            source=item.get("source") or (existing.source if existing else None),
+            year=(
+                item.get("publication_year")
+                or item.get("year")
+                or (existing.year if existing else None)
+            ),
+            citation_count=item.get("citation_count") or (existing.citation_count if existing else 0),
+            summary=item.get("summary") or (existing.summary if existing else None),
+            relevance_score=item.get("relevance_score") or (existing.relevance_score if existing else 0.0),
+        )
+        db.add(paper)
+        if doi:
+            known_by_doi[doi] = paper
+        stored_papers.append(paper)
 
     # 6. Log AI use
     try:

@@ -1,6 +1,5 @@
 import re
 import json
-import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Set
 from pydantic import BaseModel, Field
@@ -14,12 +13,9 @@ try:
         CitationStyle,
         DocumentType,
         MissingCitationClaim,
+        MissingCitationSnippet,
         UncitedPaperItem,
         CitationCheckResponse,
-    )
-    from prompts.citation_prompts import (
-        MISSING_CITATION_DETECTOR_SYSTEM_PROMPT,
-        MISSING_CITATION_DETECTOR_USER_TEMPLATE,
     )
 except ImportError:
     from backend.agents.base_agent import BaseAgent
@@ -30,12 +26,9 @@ except ImportError:
         CitationStyle,
         DocumentType,
         MissingCitationClaim,
+        MissingCitationSnippet,
         UncitedPaperItem,
         CitationCheckResponse,
-    )
-    from backend.prompts.citation_prompts import (
-        MISSING_CITATION_DETECTOR_SYSTEM_PROMPT,
-        MISSING_CITATION_DETECTOR_USER_TEMPLATE,
     )
 
 logger = logging.getLogger(__name__)
@@ -46,29 +39,18 @@ CLAIM_INDICATORS = [
     r"\bchiếm\s+\d+",
     r"\btăng\s+\d+",
     r"\bgiảm\s+\d+",
-    r"\btỷ\s+lệ\s+(?:\w+\s+)?(?:đạt|là|lên\s+tới)\s+\d+",
     r"\btheo\s+nghiên\s+cứu\b",
-    r"\bcác\s+nghiên\s+cứu\s+(?:gần\s+đây\s+)?chỉ\s+ra\b",
+    r"\bcác\s+nghiên\s+cứu\s+chỉ\s+ra\b",
     r"\btheo\s+báo\s+cáo\b",
-    r"\btheo\s+(?:tác\s+giả|thống\s+kê|dữ\s+liệu|ước\s+tính)\b",
     r"\bthống\s+kê\s+cho\s+thấy\b",
     r"\bkết\s+quả\s+cho\s+thấy\b",
-    r"\bkết\s+quả\s+khảo\s+sát\s+cho\s+thấy\b",
     r"\bđược\s+chứng\s+minh\s+là\b",
-    r"\bđã\s+chứng\s+minh\s+rằng\b",
-    r"\bchứng\s+minh\s+thực\s+nghiệm\b",
     r"\bkhảo\s+sát\s+tại\b",
     r"\bđóng\s+vai\s+trò\s+quyết\s+định\b",
     r"\bgây\s+ra\s+hậu\s+quả\s+nghiêm\s+trọng\b",
-    r"\bđược\s+(?:xem|coi|đánh\s+giá)\s+là\s+(?:hiệu\s+quả|phổ\s+biến|tối\s+ưu)\s+nhất\b",
     r"\baccording\s+to\b",
     r"\bstudies\s+show\b",
     r"\bresearch\s+indicates\b",
-    r"\bprior\s+research\b",
-    r"\bprevious\s+studies\b",
-    r"\bevidence\s+suggests\b",
-    r"\bhas\s+been\s+shown\s+to\b",
-    r"\bdata\s+reveals\b",
     r"\bstatistically\s+significant\b",
 ]
 
@@ -83,20 +65,11 @@ SELF_CLAIM_WHITELIST = [
     r"\bluận\s+văn\s+này\b",
     r"\bmục\s+tiêu\s+của\b",
     r"\bnhóm\s+tác\s+giả\b",
-    r"\bnhóm\s+nghiên\s+cứu\b",
     r"\bphương\s+pháp\s+đề\s+xuất\b",
-    r"\bmô\s+hình\s+đề\s+xuất\b",
-    r"\bthuật\s+toán\s+được\s+đề\s+xuất\b",
-    r"\btrong\s+khuôn\s+khổ\s+(?:đề\s+tài|nghiên\s+cứu|đồ\s+án)\b",
-    r"\bkết\s+quả\s+thực\s+nghiệm\s+của\s+chúng\s+tôi\b",
     r"\bwe\s+propose\b",
     r"\bin\s+this\s+study\b",
     r"\bin\s+this\s+paper\b",
     r"\bour\s+approach\b",
-    r"\bour\s+method\b",
-    r"\bour\s+results\b",
-    r"\bour\s+experimental\b",
-    r"\bwe\s+demonstrate\b",
     r"\bwe\s+achieved\b",
 ]
 
@@ -217,6 +190,72 @@ class CitationAgent(BaseAgent):
                 sentences.append(restored)
 
         return sentences
+
+    @staticmethod
+    def locate_sentence(
+        plain_text: str, sentence: str, search_from: int = 0
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """Locate the character span of ``sentence`` inside ``plain_text``.
+
+        Returns ``(char_offset, char_end)`` or ``(None, None)`` when the sentence
+        cannot be found (e.g. the LLM paraphrased it slightly).
+        """
+        if not plain_text or not sentence:
+            return None, None
+
+        start = plain_text.find(sentence, search_from)
+        if start != -1:
+            return start, start + len(sentence)
+
+        # Tolerant fallback: compare on a whitespace-normalized prefix.
+        probe = re.sub(r"\s+", " ", sentence).strip()[:60]
+        if len(probe) >= 12:
+            start = plain_text.find(probe, search_from)
+            if start != -1:
+                return start, start + len(probe)
+        return None, None
+
+    def build_sentence_positions(
+        self, plain_text: str, sentences: List[str]
+    ) -> Dict[str, Tuple[int, int, int]]:
+        """Map each sentence to ``(sentence_index, char_offset, char_end)``."""
+        positions: Dict[str, Tuple[int, int, int]] = {}
+        cursor = 0
+        for index, sentence in enumerate(sentences):
+            start, end = self.locate_sentence(plain_text, sentence, cursor)
+            if start is None:
+                continue
+            positions.setdefault(sentence, (index, start, end))
+            cursor = start
+        return positions
+
+    def attach_claim_positions(
+        self,
+        claims: List[MissingCitationClaim],
+        plain_text: str,
+        sentences: Optional[List[str]] = None,
+    ) -> List[MissingCitationClaim]:
+        """Fill ``sentence_index``/``char_offset``/``char_end`` on each claim.
+
+        The frontend uses these offsets to highlight the offending paragraph in
+        the Tiptap editor without re-running sentence tokenization.
+        """
+        positions = self.build_sentence_positions(plain_text, sentences or self.split_into_sentences(plain_text))
+        for claim in claims:
+            span = positions.get(claim.sentence)
+            if span is None:
+                start, end = self.locate_sentence(plain_text, claim.sentence)
+                if start is None:
+                    continue
+                index = next(
+                    (i for i, s in enumerate(sentences or []) if s == claim.sentence),
+                    None,
+                )
+                span = (index, start, end)
+            claim.sentence_index, claim.char_offset, claim.char_end = span
+            if claim.sentence_index is None:
+                claim.sentence_index = 0
+        return claims
 
     def normalize_paper_metadata(self, paper: Any) -> CitationMetadataSchema:
         """Extracts and normalizes CitationMetadataSchema from an ORM object or plain dictionary."""
@@ -537,12 +576,20 @@ class CitationAgent(BaseAgent):
             authors_str = ", ".join(meta.authors[:2]) + (" et al." if len(meta.authors) > 2 else "")
             catalog_items.append(f"[{p_id}] '{meta.title}' ({authors_str}, {meta.year})")
         catalog_summary = "\n".join(catalog_items) if catalog_items else "(Chưa có tài liệu nào trong đề tài)"
-        sentences_list = "\n".join([f"- {c}" for c in candidate_claims])
 
-        system_prompt = MISSING_CITATION_DETECTOR_SYSTEM_PROMPT
-        user_prompt = MISSING_CITATION_DETECTOR_USER_TEMPLATE.format(
-            catalog_summary=catalog_summary,
-            sentences_list=sentences_list,
+        system_prompt = (
+            "Bạn là chuyên gia cố vấn học thuật (Academic Citation Coach). "
+            "Nhiệm vụ của bạn là thẩm định ngữ nghĩa các câu văn nghi vấn xem có thực sự cần trích dẫn tài liệu khoa học hay không."
+        )
+
+        user_prompt = (
+            f"DANH MỤC TÀI LIỆU ĐÃ CHỌN CỦA ĐỀ TÀI:\n{catalog_summary}\n\n"
+            f"CÁC CÂU NGHI VẤN CẦN THẨM ĐỊNH NGỮ NGHĨA:\n"
+            + "\n".join([f"- {c}" for c in candidate_claims])
+            + "\n\nQUY TẮC THẨM ĐỊNH:\n"
+            "1. is_claim_requiring_citation = true: Khi câu chứa số liệu thống kê, tỷ lệ %, phát hiện thực nghiệm hoặc nhận định lý thuyết của bên thứ ba cần dẫn chứng khoa học.\n"
+            "2. is_claim_requiring_citation = false: Khi câu là nghiên cứu/phương pháp/kết quả do CHÍNH TÁC GIẢ làm (dùng 'chúng tôi', 'đồ án này', 'mô hình đề xuất') hoặc là kiến thức hiển nhiên/phổ thông.\n"
+            "3. Nếu cần trích dẫn, hãy kiểm tra danh mục tài liệu trên và chọn bài báo phù hợp nhất (nếu có) để gán recommended_paper_id, recommended_paper_title và in_text_suggestion."
         )
 
         try:
@@ -583,9 +630,6 @@ class CitationAgent(BaseAgent):
                 )
             return fallback_claims
 
-    # Alias for backward compatibility
-    _arbitrate_claims_with_llm = arbitrate_claims_with_llm
-
     def generate_project_bibliography(
         self,
         selected_papers: List[Any],
@@ -600,6 +644,118 @@ class CitationAgent(BaseAgent):
 
         res = self.formatter.format_bibliography(metadatas=metadatas, style=style_enum)
         return res.citations
+
+    async def detect_missing_citations(
+        self,
+        text: str,
+        papers: Optional[List[Any]] = None,
+        citation_style: str = "apa7",
+    ) -> List[Dict[str, Any]]:
+        """Public agent API: return uncited claims as JSON-ready dicts.
+
+        Each dict contains ``sentence``, ``reason``, ``suggested_action`` plus the
+        ``sentence_index`` / ``char_offset`` / ``char_end`` highlight span.
+        Delegates to the hybrid pipeline implemented in
+        :meth:`check_document_citations` (deterministic core + LLM arbitrator).
+        """
+        result = await self.check_document_citations(
+            content=text or "",
+            selected_papers=papers or [],
+            citation_style=citation_style,
+        )
+        return [claim.model_dump() for claim in result.missing_claims]
+
+    @staticmethod
+    def build_missing_suggestion(
+        suggested_action: Optional[str] = None,
+        recommended_paper_title: Optional[str] = None,
+        in_text_suggestion: Optional[str] = None,
+    ) -> str:
+        """Human-readable ``suggestion`` for the compact ``missing[]`` contract."""
+        if recommended_paper_title:
+            return f"Bổ sung trích dẫn cho tài liệu: {recommended_paper_title}"
+        if in_text_suggestion:
+            return f"Bổ sung trích dẫn dạng: {in_text_suggestion}"
+        return suggested_action or "Bổ sung nguồn trích dẫn cho nhận định này."
+
+    async def detect_missing(
+        self,
+        text: str,
+        papers: Optional[List[Any]] = None,
+        citation_style: str = "apa7",
+    ) -> List[Dict[str, Any]]:
+        """Week-3 public API: ``detect_missing(text)``.
+
+        Returns one dict per uncited claim in the compact contract shape
+        ``{"text", "index", "suggestion"}`` (the richer ``sentence``, ``reason``,
+        ``suggested_action`` and highlight-offset fields are kept so the same
+        payload can feed the Tiptap editor). It delegates to
+        :meth:`detect_missing_citations`, i.e. the deterministic regex/rule core
+        plus the optional LLM arbitrator - no logic is duplicated here.
+        """
+        claims = await self.detect_missing_citations(
+            text=text or "",
+            papers=papers or [],
+            citation_style=citation_style,
+        )
+
+        results: List[Dict[str, Any]] = []
+        for position, claim in enumerate(claims):
+            sentence_index = claim.get("sentence_index")
+            results.append(
+                {
+                    **claim,
+                    "text": claim.get("sentence", ""),
+                    "index": sentence_index if sentence_index is not None else position,
+                    "suggestion": self.build_missing_suggestion(
+                        suggested_action=claim.get("suggested_action"),
+                        recommended_paper_title=claim.get("recommended_paper_title"),
+                        in_text_suggestion=claim.get("in_text_suggestion"),
+                    ),
+                }
+            )
+        return results
+
+    def format_citations(self, papers: List[Any], style: str = "apa7") -> List[str]:
+        """Public agent API: full bibliography entries for ``papers``.
+
+        Thin, synchronous wrapper around the rule-based
+        :class:`CitationFormatterService` (deterministic + sub-millisecond).
+        """
+        return self.generate_project_bibliography(selected_papers=papers, citation_style=style)
+
+    def format_citations_detailed(
+        self, papers: List[Any], style: str = "apa7"
+    ) -> List[Dict[str, Any]]:
+        """Format every paper into in-text + full citation entries (numbered styles aware)."""
+        if not papers:
+            return []
+
+        style_enum = (
+            CitationStyle(style.lower())
+            if style and style.lower() in [s.value for s in CitationStyle]
+            else CitationStyle.APA7
+        )
+
+        detailed: List[Dict[str, Any]] = []
+        for index, paper in enumerate(papers, start=1):
+            meta = self.normalize_paper_metadata(paper)
+            formatted = self.formatter.format_citation(meta, style=style_enum, index=index)
+            detailed.append(
+                {
+                    "selected_paper_id": getattr(paper, "id", None)
+                    or (paper.get("id") if isinstance(paper, dict) else None),
+                    "paper_id": getattr(paper, "cached_paper_id", None)
+                    or (paper.get("cached_paper_id") if isinstance(paper, dict) else None),
+                    "title": meta.title,
+                    "authors": meta.authors,
+                    "year": meta.year,
+                    "in_text_citation": formatted.in_text_citation,
+                    "full_citation": formatted.full_citation,
+                    "style": style_enum,
+                }
+            )
+        return detailed
 
     async def check_document_citations(
         self,
@@ -619,27 +775,20 @@ class CitationAgent(BaseAgent):
         5. LLM filters out author self-claims and common knowledge, and matches candidate claims
            with suitable papers in selected_papers.
         """
-        # --- Phase 1: Deterministic In-text Extraction & Cross-referencing (CPU-bound) ---
-        def _phase1_deterministic() -> Tuple[List[str], List[str], List[str], List[UncitedPaperItem], int]:
-            plain_text = self.clean_html_to_text(content)
-            sentences = self.split_into_sentences(plain_text)
-            in_text_citations = self.extract_in_text_citations(plain_text)
-            invalid_cits, warnings, uncited, verified = self.cross_reference_citations(
-                in_text_citations=in_text_citations,
-                selected_papers=selected_papers,
-                citation_style=citation_style,
-            )
-            candidates = self.detect_candidate_missing_claims(sentences)
-            return candidates, invalid_cits, warnings, uncited, verified
+        plain_text = self.clean_html_to_text(content)
+        sentences = self.split_into_sentences(plain_text)
 
-        # Offload regex matching and document tokenization to worker thread
-        (
-            candidate_claims,
-            invalid_citations,
-            citation_warnings,
-            uncited_papers,
-            verified_count,
-        ) = await asyncio.to_thread(_phase1_deterministic)
+        # --- Phase 1: Deterministic In-text Extraction & Cross-referencing ---
+        in_text_citations = self.extract_in_text_citations(plain_text)
+
+        invalid_citations, citation_warnings, uncited_papers, verified_count = self.cross_reference_citations(
+            in_text_citations=in_text_citations,
+            selected_papers=selected_papers,
+            citation_style=citation_style,
+        )
+
+        # Fast heuristic candidate pre-filtering
+        candidate_claims = self.detect_candidate_missing_claims(sentences)
 
         # --- Phase 2: LLM Semantic Arbitration ---
         missing_claims = await self.arbitrate_claims_with_llm(
@@ -648,7 +797,24 @@ class CitationAgent(BaseAgent):
             citation_style=citation_style,
         )
 
+        # --- Phase 3: attach highlight offsets for the editor (index/offset) ---
+        missing_claims = self.attach_claim_positions(missing_claims, plain_text, sentences)
+
         total_issues = len(missing_claims) + len(invalid_citations) + len(citation_warnings)
+
+        # Compact [{text, index, suggestion}] view of the missing claims (week-3 contract).
+        missing_snippets = [
+            MissingCitationSnippet(
+                text=claim.sentence,
+                index=claim.sentence_index if claim.sentence_index is not None else position,
+                suggestion=self.build_missing_suggestion(
+                    suggested_action=claim.suggested_action,
+                    recommended_paper_title=claim.recommended_paper_title,
+                    in_text_suggestion=claim.in_text_suggestion,
+                ),
+            )
+            for position, claim in enumerate(missing_claims)
+        ]
 
         return CitationCheckResponse(
             total_issues=total_issues,
@@ -658,6 +824,8 @@ class CitationAgent(BaseAgent):
             uncited_papers=uncited_papers,
             verified_count=verified_count,
             credits_charged=2,
+            missing=missing_snippets,
+            total_missing=len(missing_snippets),
         )
 
 

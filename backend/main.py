@@ -1,17 +1,15 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from api.routes import auth, projects, credits, health, literature, agents, citation, agent_jobs
+from api.middleware import setup_cors, setup_rate_limiting
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Middleware registration order matters: the last middleware added becomes the
+# outermost layer. Rate limiting is added first (so it can short-circuit 429s)
+# and CORS last (so browsers still receive CORS headers on throttled responses).
+setup_rate_limiting(app)
+setup_cors(app)
 
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(projects.router, prefix=settings.API_V1_STR)
